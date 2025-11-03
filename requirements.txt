@@ -1,4 +1,5 @@
-Django
+django
 djangorestframework
 psycopg2-binary
 python-dotenv
+Pillow
