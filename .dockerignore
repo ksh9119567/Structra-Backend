@@ -1,0 +1,45 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore environment files
+.env
+*.env
+
+# Ignore SQLite database files
+*.sqlite3
+
+# Ignore media and static files
+/media/
+/static/
+
+# Ignore local development files
+*.log
+*.pot
+*.mo
+
+# Ignore test and coverage files
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Ignore virtual environments
+.venv/
+.env/
+.task_venv/
+
+# Ignore Docker-related files
+Dockerfile*
+docker-compose*
+
+# Ignore VSCode and editor settings
+.vscode/
+.idea/
+*.swp
+
+# Ignore git files
+.git/
+.gitignore
