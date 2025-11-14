@@ -20,7 +20,7 @@ from services.otp_service import (
     generate_otp, store_otp, verify_otp, increment_attempts,
     create_reset_token, get_userid_for_reset_token, delete_reset_token
 )
-from services.notification_services import send_email_otp, send_sms_otp
+from services.notification_services import send_email_otp, send_sms_otp, send_email_otp_async
 
 
 # -------------------------------
@@ -31,6 +31,18 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get(self, request):
+        try:
+            email = request.query_params.get("email")
+            if email:
+                user = get_user(email, kind="email")
+                return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+            else:
+                return Response({"detail": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+        
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -127,7 +139,7 @@ class GetEmailOTPView(APIView):
 
         otp = generate_otp()
         store_otp("email", email, otp)
-        send_email_otp(email, otp)
+        send_email_otp_async(email, otp)
         return Response({"detail": "OTP sent to email"}, status=status.HTTP_200_OK)
 
 
@@ -225,7 +237,7 @@ class GetLoginOTPView(APIView):
         store_otp(f"login:{kind}", identifier, otp)
 
         if kind == "email":
-            send_email_otp(identifier, otp)
+            send_email_otp_async(identifier, otp)
         elif kind == "phone":
             send_sms_otp(identifier, otp)
         else:
@@ -295,7 +307,7 @@ class ForgotPasswordRequestView(APIView):
         otp = generate_otp()
         store_otp(f"password:{kind}", identifier, otp)
         if kind == "email":
-            send_email_otp(identifier, otp)
+            send_email_otp_async(identifier, otp)
         else:
             send_sms_otp(identifier, otp)
 
@@ -335,7 +347,7 @@ class ForgotPasswordVerifyView(APIView):
 class ForgotPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
-    def post(self, request):
+    def put(self, request):
         serializer = ForgotPasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         reset_token = serializer.validated_data["reset_token"]

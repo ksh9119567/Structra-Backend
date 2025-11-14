@@ -7,18 +7,17 @@ from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
-    # expose id directly (it's now the actual field name)
     phone_number = serializers.CharField(source="phone_no", read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "email", "username", "first_name", "last_name", "profile_picture", "phone_number"]
+        fields = ["id", "email", "username", "first_name", "last_name", "profile_picture", "phone_number", 
+                  "is_email_verified", "is_phone_verified", "is_active", "is_staff", "date_joined"]
         read_only_fields = ["id"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
-    # accept phone_number in API but map to model's phone_no
     phone_number = serializers.CharField(required=False, allow_blank=True, write_only=True, source="phone_no")
 
     class Meta:
