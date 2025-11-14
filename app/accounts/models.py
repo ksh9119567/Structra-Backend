@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
@@ -31,15 +33,19 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_superuser=True.")
 
         return self.create_user(email, password, **extra_fields)
-
-
+        
+        
 class User(AbstractBaseUser, PermissionsMixin):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, blank=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    phone_no = models.CharField(max_length=10, blank=True, null=True)
 
+    is_email_verified = models.BooleanField(default=False)
+    is_phone_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -51,3 +57,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+    @property
+    def phone_number(self):
+        """Alias for `phone_no` so callers can use `phone_number` consistently."""
+        return self.phone_no

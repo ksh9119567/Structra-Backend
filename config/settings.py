@@ -21,7 +21,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*', 'testserver', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -39,6 +39,8 @@ INSTALLED_APPS = [
     'app.tasks',
     'app.teams',
     'app.comments',
+    'app.sprints',
+    'app.organizations',
 ]
 
 MIDDLEWARE = [
@@ -86,17 +88,18 @@ DATABASES = {
 }
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = os.getenv("REDIS_PORT", 6379)
-REDIS_DB = os.getenv("REDIS_DB", 0)
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
-# redis_client = redis.StrictRedis(
-#     host=REDIS_HOST,
-#     port=REDIS_PORT,
-#     db=REDIS_DB,
-#     password=REDIS_PASSWORD,
-#     decode_responses=True
-# )
+# Initialize Redis client as a Django setting so services can access it via settings.redis_client
+REDIS_CLIENT = redis.StrictRedis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    db=REDIS_DB,
+    password=REDIS_PASSWORD,
+    decode_responses=True
+)
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -158,3 +161,16 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# Email Configuration
+# For development, use console backend (prints to stdout). Override in production.
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@taskapp.local')
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')

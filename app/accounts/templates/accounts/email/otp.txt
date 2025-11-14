@@ -1,0 +1,3 @@
+Your verification code is: {{ otp }}
+
+It will expire in 5 minutes.
