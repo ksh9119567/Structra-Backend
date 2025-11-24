@@ -16,6 +16,10 @@ def store_invite_token(user_id, invite_type, ttl_seconds: int = INVITE_TOKEN_TTL
     settings.REDIS_CLIENT.setex(key, ttl_seconds, str(user_id))
     return token
 
+def delete_invite_token(invite_type, token: str):
+    key = f"{INVITE_TOKEN_PREFIX}{invite_type}:{token}"
+    settings.REDIS_CLIENT.delete(key)
+    
 def verify_invite_token(invite_type, token: str):
     key = f"{INVITE_TOKEN_PREFIX}{invite_type}:{token}"
     val = settings.REDIS_CLIENT.get(key)
@@ -23,11 +27,9 @@ def verify_invite_token(invite_type, token: str):
         return None
     try:
         user_id = val
+        delete_invite_token(invite_type, token)
         return user_id
     except Exception:
         # stored value was not in expected format
         return None
     
-def delete_invite_token(invite_type, token: str):
-    key = f"{INVITE_TOKEN_PREFIX}{invite_type}:{token}"
-    settings.REDIS_CLIENT.delete(key)

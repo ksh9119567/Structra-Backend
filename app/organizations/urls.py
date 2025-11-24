@@ -8,6 +8,7 @@ urlpatterns = [
     path("create-org/", OrganizationView.as_view(), name="create_org"),
     path("get-org-details/", OrganizationMembershipView.as_view({"get": "retrieve"}), name="get_org_details"),
     path("get-org-members/", OrganizationMembershipView.as_view({"get": "list"}), name="get_org_members"),
+    path("self-remove-member/", OrganizationMembershipView.as_view({"delete": "self_remove_member"}), name="self_remove_member"),
     path("update-org/", OrganizationUpdateView.as_view({"put": "update_org"}), name="update_org"),
     path("sent-invite/", OrganizationUpdateView.as_view({"post": "send_invite"}), name="send_invite"),
     path("add-org-member/", OrganizationUpdateView.as_view({"post": "add_member"}), name="add_org_member"),
