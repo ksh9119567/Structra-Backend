@@ -9,7 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .models import User
-from .utils import get_user
+from core.utils import get_user
 from .serializers import (
     RegisterSerializer, UserSerializer, CustomTokenObtainPairSerializer,
     OTPLoginSerializer, VerifyOTPSerializer,

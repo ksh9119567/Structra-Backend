@@ -22,6 +22,8 @@ def get_org_role(user, organization):
     Return role string or None.
     Accepts organization instance or pk.
     """
+    if organization is None:
+        return None
     if user is None or not getattr(user, "is_authenticated", False):
         return None
     try:
@@ -31,6 +33,8 @@ def get_org_role(user, organization):
 
 
 def get_team_role(user, team):
+    if team is None:
+        return None
     if user is None or not getattr(user, "is_authenticated", False):
         return None
     try:
