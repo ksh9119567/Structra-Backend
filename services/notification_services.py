@@ -6,14 +6,16 @@ from email.mime.multipart import MIMEMultipart
 from django.core.mail import send_mail
 from django.conf import settings
 
-from app.accounts.tasks import send_otp_email_task 
+from app.accounts.tasks import send_otp_email_task, send_invite_email_task
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------
+# 1. OTP via Email + Phone 
+# ---------------------------------------------
 # for synchronous sending
 def send_email_otp(recipient_email, otp) -> bool:
-    import ipdb; ipdb.set_trace()
     sender_email = settings.EMAIL_HOST_USER
     password = settings.EMAIL_HOST_PASSWORD
     host = settings.EMAIL_HOST
@@ -72,7 +74,6 @@ def send_email_otp_async(email: str, otp: str, subject: str = "Your verification
     # call the celery task (non-blocking)
     send_otp_email_task.delay(email, otp, subject)
 
-
 def send_sms_otp(phone_number: str, otp: str, ttl_minutes: int = 5):
     """Send OTP via SMS with error handling."""
     try:
@@ -82,3 +83,13 @@ def send_sms_otp(phone_number: str, otp: str, ttl_minutes: int = 5):
     except Exception as e:
         logger.error(f"Failed to send SMS OTP to {phone_number}: {str(e)}")
         raise
+
+
+# ---------------------------------------------
+# 2. Joining Invite via Email
+# ---------------------------------------------
+
+def send_invite_email(email: str, invite_type: str, name: str, sender: str):
+    # call the celery task (non-blocking)
+    send_invite_email_task.delay(email, invite_type, name, sender)
+    

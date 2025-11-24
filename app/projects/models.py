@@ -14,6 +14,8 @@ class Project(TimeStampedModel):
     organization = models.ForeignKey(
         "organizations.Organization",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="projects"
     )
 
@@ -40,6 +42,8 @@ class Project(TimeStampedModel):
         related_name="projects"
     )
 
+    is_self_remove_allowed = models.BooleanField(default=False)
+    
     def __str__(self):
         return self.name
 

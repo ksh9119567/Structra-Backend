@@ -23,6 +23,8 @@ class Organization(TimeStampedModel):
         related_name="organizations"
     )
 
+    is_self_remove_allowed = models.BooleanField(default=False)
+    
     def __str__(self):
         return self.name
 
