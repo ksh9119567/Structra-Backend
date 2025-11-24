@@ -211,7 +211,7 @@ class TeamUpdateView(viewsets.ViewSet):
             
             self.check_object_permissions(request, team)
             
-            user_id = verify_invite_token(invite_type="organization", token=invite_token)
+            user_id = verify_invite_token(invite_type="team", token=invite_token)
             if user_id is None:
                 raise ValidationError("Invalid invite token")
             
