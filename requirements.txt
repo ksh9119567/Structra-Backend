@@ -7,3 +7,4 @@ ipython
 djangorestframework-simplejwt
 redis
 ipdb
+celery
