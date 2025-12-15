@@ -116,7 +116,7 @@ class TeamMembershipView(viewsets.ViewSet):
             
             if team.is_self_remove_allowed:
                 if request.user == team.created_by:
-                    raise PermissionDenied("You cannot remove the creator of the team")
+                    raise PermissionDenied("Team creator cannot remove themselves.")
                 
                 membership = get_team_membership(team_id, request.user)
                 membership.delete()
