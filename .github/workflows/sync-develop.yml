@@ -1,0 +1,38 @@
+name: Sync main → develop
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published, edited]
+
+jobs:
+  sync-develop:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write      # allows pushing back to repo
+      pull-requests: write # allows creating and merging PRs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0   # IMPORTANT for merge
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch all branches
+        run: git fetch origin +refs/heads/*:refs/remotes/origin/*
+
+      - name: Merge main → develop
+        run: |
+          git checkout develop
+          git merge origin/main --no-edit || true
+
+      - name: Push changes to develop
+        run: git push origin develop || true
