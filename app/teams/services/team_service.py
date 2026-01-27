@@ -1,5 +1,5 @@
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from teams.models import TeamMembership
+from app.teams.models import TeamMembership
 from app.organizations.models import OrganizationMembership
 
 

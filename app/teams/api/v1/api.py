@@ -7,8 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
 
-from teams.models import Team
-from teams.api.v1.serializers import (
+from app.teams.models import Team
+from app.teams.api.v1.serializers import (
     TeamSerializer, TeamCreateSerializer, TeamMembershipSerializer, TeamUpdateSerializer, 
     TeamMemberUpdateSerializer, InviteMemberSerializer,
 )
@@ -21,11 +21,11 @@ from core.permissions.team import IsTeamMember, IsTeamManager
 from core.permissions.combined import IsOrgOwnerOrTeamManager
 
 from services.invite_token_service import verify_invite_token
-from teams.services.team_invite_service import send_team_invite
-from teams.services.team_membership_service import (
+from app.teams.services.team_invite_service import send_team_invite
+from app.teams.services.team_membership_service import (
     add_team_member, remove_team_member, self_remove_team_member, update_team_member_role,
 )
-from teams.services.team_service import (
+from app.teams.services.team_service import (
     transfer_team_ownership, delete_team,
 )
 

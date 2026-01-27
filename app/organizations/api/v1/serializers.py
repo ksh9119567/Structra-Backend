@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from organizations.models import Organization, OrganizationMembership
+from app.organizations.models import Organization, OrganizationMembership
 from core.constants import ORG_ROLE_HIERARCHY
 from core.permissions.base import get_org_role
 

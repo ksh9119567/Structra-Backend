@@ -44,13 +44,13 @@ class Task(TimeStampedModel):
         related_name="created_tasks"
     )
     
-    uploaded_data =  models.ForeignKey(
-        "data.UploadedData",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="tasks"
-    )
+    # uploaded_data =  models.ForeignKey(
+    #     "data.UploadedData",
+    #     on_delete=models.SET_NULL,
+    #     null=True,
+    #     blank=True,
+    #     related_name="tasks"
+    # )
     
     def __str__(self):
         return f"{self.title} - {self.project.name}"

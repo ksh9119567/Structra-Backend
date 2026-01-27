@@ -1,5 +1,5 @@
 from rest_framework.exceptions import ValidationError, PermissionDenied
-from teams.models import TeamMembership
+from app.teams.models import TeamMembership
 
 
 def add_team_member(*, team, user, role):

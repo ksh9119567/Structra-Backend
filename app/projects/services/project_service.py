@@ -1,6 +1,6 @@
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from projects.models import ProjectMembership
+from app.projects.models import ProjectMembership
 from app.organizations.models import OrganizationMembership
 
 

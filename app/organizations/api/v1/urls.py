@@ -1,11 +1,11 @@
 from django.urls import path
 
-from api import OrganizationAPI
+from .api import OrganizationAPI
 
 
 urlpatterns = [
-    path("get-org/", OrganizationAPI.as_view(), name="get_org"),
-    path("create-org/", OrganizationAPI.as_view(), name="create_org"),
+    path("get-org/", OrganizationAPI.as_view({'get': 'list'}), name="get_org"),
+    path("create-org/", OrganizationAPI.as_view({'post': 'create'}), name="create_org"),
     path("get-org-details/", OrganizationAPI.as_view({"get": "retrieve"}), name="get_org_details"),
     path("get-org-members/", OrganizationAPI.as_view({"get": "list"}), name="get_org_members"),
     path("self-remove-member/", OrganizationAPI.as_view({"delete": "self_remove_member"}), name="self_remove_member"),

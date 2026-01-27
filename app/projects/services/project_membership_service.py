@@ -1,6 +1,6 @@
 from rest_framework.exceptions import ValidationError, PermissionDenied
 
-from projects.models import ProjectMembership
+from app.projects.models import ProjectMembership
 from core.utils import get_project_membership
 
 

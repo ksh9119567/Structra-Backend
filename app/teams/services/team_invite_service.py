@@ -1,5 +1,5 @@
 from rest_framework.exceptions import ValidationError
-from teams.models import TeamMembership
+from app.teams.models import TeamMembership
 from services.invite_token_service import store_invite_token
 from services.notification_services import send_invite_email
 

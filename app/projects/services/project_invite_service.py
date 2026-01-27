@@ -1,6 +1,6 @@
 from rest_framework.exceptions import ValidationError
 
-from projects.models import ProjectMembership
+from app.projects.models import ProjectMembership
 from services.invite_token_service import store_invite_token
 from services.notification_services import send_invite_email
 

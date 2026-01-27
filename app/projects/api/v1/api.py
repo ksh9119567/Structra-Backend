@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
 
-from projects.models import Project
-from serializers import (
+from app.projects.models import Project
+from app.projects.api.v1.serializers import (
     ProjectSerializer, ProjectCreateSerializer, ProjectMembershipSerializer, ProjectUpdateSerializer, 
     ProjectMemberUpdateSerializer, InviteMemberSerializer,
 )
@@ -23,11 +23,11 @@ from core.permissions.combined import (
 )
 
 from services.invite_token_service import verify_invite_token
-from projects.services.project_invite_service import send_project_invite
-from projects.services.project_membership_service import (
+from app.projects.services.project_invite_service import send_project_invite
+from app.projects.services.project_membership_service import (
     add_project_member, remove_project_member, self_remove_project_member, update_project_member_role,
 )
-from projects.services.project_service import (
+from app.projects.services.project_service import (
     transfer_project_ownership, delete_project,
 )
 

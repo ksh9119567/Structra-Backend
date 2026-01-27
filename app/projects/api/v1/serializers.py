@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from projects.models import Project, ProjectMembership
+from app.projects.models import Project, ProjectMembership
 from core.permissions.base import get_org_role, get_team_role, get_project_role
 from core.constants import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
 

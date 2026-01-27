@@ -1,6 +1,6 @@
 from django.urls import path
 
-from api import TeamAPI
+from .api import TeamAPI
 
 urlpatterns = [
     path("get-user-teams/", TeamAPI.as_view({"get": "get_user_teams"}), name="get_user_teams"),

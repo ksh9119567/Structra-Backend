@@ -1,6 +1,6 @@
 from django.urls import path
 
-from api import ProjectAPI
+from .api import ProjectAPI
 
 urlpatterns = [
     path('get-user-projects/', ProjectAPI.as_view({'get': 'list'}), name='project-list'),

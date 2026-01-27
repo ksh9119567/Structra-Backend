@@ -9,7 +9,6 @@ class TimeStampedModel(models.Model):
     class Meta:
         abstract = True
 
-class UploadedData(TimeStampedModel): # Need to plan this model properly later as per requirements.
-    pass
+
         
     

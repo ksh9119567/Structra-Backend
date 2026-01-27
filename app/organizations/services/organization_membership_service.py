@@ -1,5 +1,5 @@
 from rest_framework.exceptions import ValidationError, PermissionDenied
-from organizations.models import OrganizationMembership
+from app.organizations.models import OrganizationMembership
 
 
 def add_member(*, organization, user, role):

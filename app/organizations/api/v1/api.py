@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
 
-from organizations.models import Organization
-from serializers import (
+from app.organizations.models import Organization
+from app.organizations.api.v1.serializers import (
     OrganizationSerializer, OrganizationCreateSerializer, OrganizationUpdateSerializer,
     OrganizationMembershipSerializer, InviteMemberSerializer, OrganizationMemberUpdateSerializer,
 )
@@ -21,12 +21,12 @@ from core.permissions.organization import (
     IsOrganizationAdmin, IsOrganizationMember, IsOrganizationOwner,
 )
 
-from services.organization_invite_service import send_organization_invite
-from services.organization_membership_service import (
+from app.organizations.services.organization_invite_service import send_organization_invite
+from app.organizations.services.organization_membership_service import (
     add_member, remove_member, self_remove, update_role,
 )
 
-from services.organization_service import (
+from app.organizations.services.organization_service import (
     transfer_ownership, delete_organization,
 )
 
