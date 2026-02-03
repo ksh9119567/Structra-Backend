@@ -1,10 +1,11 @@
 django
 djangorestframework
+djangorestframework-simplejwt
+django-filter
 psycopg2-binary
 python-dotenv
 Pillow
 ipython
-djangorestframework-simplejwt
 redis
 ipdb
 celery

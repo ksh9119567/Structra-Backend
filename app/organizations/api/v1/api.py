@@ -73,10 +73,8 @@ class OrganizationAPI(viewsets.ModelViewSet):
         orgs = Organization.objects.filter(
             memberships__user=request.user
         ).distinct()
-
-        serializer_class = self.get_serializer_class()
-        serializer = serializer_class(orgs, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(OrganizationSerializer(orgs, many=True).data, status=status.HTTP_200_OK)
 
     def create(self, request):
         serializer_class = self.get_serializer_class()

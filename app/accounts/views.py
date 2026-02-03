@@ -20,7 +20,7 @@ from services.otp_service import (
     generate_otp, store_otp, verify_otp, increment_attempts,
     create_reset_token, get_userid_for_reset_token, delete_reset_token
 )
-from services.notification_services import send_email_otp, send_sms_otp, send_email_otp_async
+from services.notification_services import send_sms_otp, send_email_otp_async
 
 
 # -------------------------------

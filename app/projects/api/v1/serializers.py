@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
 from app.projects.models import Project, ProjectMembership
+
+from app.organizations.models import Organization
+from app.teams.models import Team
 from core.permissions.base import get_org_role, get_team_role, get_project_role
 from core.constants import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
 
@@ -35,7 +38,6 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         team_id = attrs.get("team_id", None)
         
         if org_id:
-            from app.organizations.models import Organization
             try:
                 org = Organization.objects.get(id=org_id)
             except Organization.DoesNotExist:
@@ -48,7 +50,6 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
             attrs["organization"] = org
         
         if team_id:
-            from app.teams.models import Team
             try:
                 team = Team.objects.get(id=team_id)
             except Team.DoesNotExist:
@@ -64,7 +65,7 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         request = self.context["request"]
-        org = validated_data.pop("organizatiob", None)
+        org = validated_data.pop("organization", None)
         team = validated_data.pop("team", None)
         
         project = Project.objects.create(created_by = request.user, **validated_data)

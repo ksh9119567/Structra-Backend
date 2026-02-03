@@ -4,6 +4,7 @@ from app.accounts.models import User
 from app.organizations.models import Organization, OrganizationMembership
 from app.teams.models import Team, TeamMembership
 from app.projects.models import Project, ProjectMembership
+from app.tasks.models import Task
 
 
 def get_user(identifier, kind="email"):
@@ -132,3 +133,18 @@ def get_project_membership(project_id, user):
         except Exception as e:
             raise Exception(e)
     raise ValidationError("project ID and user are required")
+
+
+def get_task(task_id):
+    """
+    Returns a task instance by task_id.
+    """
+    if task_id:
+        try:
+            obj = Task.objects.filter(id=task_id).first()
+            if not obj:
+                raise NotFound("Task not found")
+            return obj
+        except Exception as e:
+            raise Exception(e)
+    raise ValidationError("Task ID is required")
