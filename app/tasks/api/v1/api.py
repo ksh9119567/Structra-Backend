@@ -1,10 +1,13 @@
 import logging
 
+from django_filters.rest_framework import DjangoFilterBackend
+
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from tasks.models import Task
 from app.tasks.api.v1.serializers import (
@@ -12,6 +15,7 @@ from app.tasks.api.v1.serializers import (
 )
 from app.tasks.services.task_service import delete_task
 
+from app.tasks.filters import TaskFilter
 from app.projects.models import Project
 from core.pagination import StandardPagination
 from core.permissions.project import IsProjectMember
@@ -28,6 +32,9 @@ class TaskAPI(viewsets.ViewSet):
     """
     queryset = Task.objects.all()
     pagination_class = StandardPagination()
+    filterset_class = TaskFilter
+    search_fields = ["title", "description"]
+    ordering_fields = ["created_at", "due_date", "priority"]
     
     def get_permissions(self):
         if self.action in ["list", "retrieve", "create", "update", "destroy"]:
@@ -43,11 +50,23 @@ class TaskAPI(viewsets.ViewSet):
         elif self.action == "update":
             return TaskUpdateSerializer
     
+    def apply_filters(self, request, queryset):
+        django_filter = DjangoFilterBackend()
+        queryset = django_filter.filter_queryset(request, queryset, self)
+        
+        search_filter = SearchFilter()
+        queryset = search_filter.filter_queryset(request, queryset, self)
+        
+        ordering_filter = OrderingFilter()
+        queryset = ordering_filter.filter_queryset(request, queryset, self)
+        
+        return queryset
+        
     def list(self, request):
         project = get_project(request.query_params.get("project_id"))
         self.check_object_permissions(request, project)
         
-        tasks = Task.objects.filter(project = project).order_by("-created_at")
+        tasks = self.apply_filters(request, Task.objects.filter(project = project))
         
         page = self.pagination_class.paginate_queryset(tasks, request)
         
