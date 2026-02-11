@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from app.teams.models import Team, TeamMembership
+from .models import Team, TeamMembership
 from app.accounts.models import User
 from app.organizations.models import Organization, OrganizationMembership
 from app.organizations.models import Organization

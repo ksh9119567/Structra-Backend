@@ -28,14 +28,6 @@ PROJECT_STATUS = [
     ("ARCHIVED", "Archived"),
 ]
 
-TASK_STATUS = [
-    ("TO_DO", "To Do"),
-    ("IN_PROGRESS", "In Progress"),
-    ("REVIEW", "In Review"),
-    ("DONE", "Done"),
-    ("BLOCKED", "Blocked"),
-]
-
 ORG_ROLE_HIERARCHY = {
     "OWNER": 5,
     "ADMIN": 4,
@@ -57,18 +49,3 @@ PROJECT_ROLE_HIERARCHY = {
     "CONTRIBUTOR": 2,
     "VIEWER": 1,
 }
-
-TASK_PRIORITY = {
-    "LOW": 1,
-    "MEDIUM": 2,
-    "HIGH": 3,
-    "URGENT": 4,
-}
-
-TASK_TYPE = [
-    ("BUG", "Bug"),
-    ("FEATURE", "Feature"),
-    ("IMPROVEMENT", "Improvement"),
-    ("DOCUMENTATION", "Documentation"),
-]
-

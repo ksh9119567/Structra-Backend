@@ -15,59 +15,59 @@ logger = logging.getLogger(__name__)
 # 1. OTP via Email + Phone 
 # ---------------------------------------------
 # for synchronous sending
-# def send_email_otp(recipient_email, otp) -> bool:
-#     sender_email = settings.EMAIL_HOST_USER
-#     password = settings.EMAIL_HOST_PASSWORD
-#     host = settings.EMAIL_HOST
-#     port = settings.EMAIL_PORT
+def send_email_otp(recipient_email, otp) -> bool:
+    sender_email = settings.EMAIL_HOST_USER
+    password = settings.EMAIL_HOST_PASSWORD
+    host = settings.EMAIL_HOST
+    port = settings.EMAIL_PORT
 
-#     # Subject and headers
-#     msg = MIMEMultipart("alternative")
-#     msg['From'] = sender_email
-#     msg['To'] = recipient_email
-#     msg['Subject'] = 'Your One-Time Password (OTP)'
+    # Subject and headers
+    msg = MIMEMultipart("alternative")
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+    msg['Subject'] = 'Your One-Time Password (OTP)'
 
-#     # Plain text fallback
-#     text = f"""\
-# Hello,
+    # Plain text fallback
+    text = f"""\
+Hello,
 
-# Your One-Time Password (OTP) is: {otp}
+Your One-Time Password (OTP) is: {otp}
 
-# This OTP is valid for the next 5 minutes.
+This OTP is valid for the next 5 minutes.
 
-# If you did not request this, please ignore the email.
-# """
+If you did not request this, please ignore the email.
+"""
 
-#     # HTML template body
-#     html = f"""\
-# <html>
-# <body style="font-family: Arial, sans-serif; color: #333;">
-#     <p>Hello,</p>
-#     <p>Your One-Time Password (OTP) is:</p>
-#     <h1 style="color: #000080;">{otp}</h1>
-#     <p>This OTP is valid for <strong>5 minutes</strong>.</p>
-#     <p>If you did not request this, please ignore this email.</p>
-#     <br>
-#     <p>Regards,<br>Team TaxSpanner</p>
-# </body>
-# </html>
-# """
+    # HTML template body
+    html = f"""\
+<html>
+<body style="font-family: Arial, sans-serif; color: #333;">
+    <p>Hello,</p>
+    <p>Your One-Time Password (OTP) is:</p>
+    <h1 style="color: #000080;">{otp}</h1>
+    <p>This OTP is valid for <strong>5 minutes</strong>.</p>
+    <p>If you did not request this, please ignore this email.</p>
+    <br>
+    <p>Regards,<br>Team TaxSpanner</p>
+</body>
+</html>
+"""
 
-#     # Attach both plain and HTML parts
-#     msg.attach(MIMEText(text, 'plain'))
-#     msg.attach(MIMEText(html, 'html'))
+    # Attach both plain and HTML parts
+    msg.attach(MIMEText(text, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
 
-#     try:
-#         server = smtplib.SMTP(host, port)
-#         server.starttls()
-#         server.login(sender_email, password)
-#         server.sendmail(sender_email, recipient_email, msg.as_string())
-#         server.quit()
-#         logger.info("Email sent successfully.")
-#         return True
-#     except Exception as e:
-#         logger.error(f"Failed to send email: {str(e)}")
-#         return False
+    try:
+        server = smtplib.SMTP(host, port)
+        server.starttls()
+        server.login(sender_email, password)
+        server.sendmail(sender_email, recipient_email, msg.as_string())
+        server.quit()
+        logger.info("Email sent successfully.")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email: {str(e)}")
+        return False
 
 # for asynchronous sending
 def send_email_otp_async(email: str, otp: str, subject: str = "Your verification code"):
