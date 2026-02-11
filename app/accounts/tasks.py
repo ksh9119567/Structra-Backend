@@ -1,12 +1,12 @@
+# accounts/tasks.py
 from celery import shared_task
-
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.conf import settings
 
 
 @shared_task(bind=True)
-def send_otp_email_task(self, email: str, otp: str, subject: str = "Your One-Time Password (OTP)"):
+def send_otp_email_task(self, email: str, otp: str, subject: str = "Your verification code"):
     """
     Celery task to send an email containing OTP.
     """

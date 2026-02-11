@@ -32,13 +32,3 @@ class IsProjectManager(BasePermission, RoleCheckerMixin):
             return False
         role = get_project_role(request.user, project)
         return self.has_minimum_role(role, "MANAGER", PROJECT_ROLE_HIERARCHY)
-    
-
-class IsProjectOwner(BasePermission, RoleCheckerMixin):
-    message = "Only project owners can perform this action."
-
-    def has_object_permission(self, request, view, project):
-        if not getattr(request.user, "is_authenticated", False):
-            return False
-        role = get_project_role(request.user, project)
-        return self.has_minimum_role(role, "OWNER", PROJECT_ROLE_HIERARCHY)
