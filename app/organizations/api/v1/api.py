@@ -1,15 +1,26 @@
 import logging
 
+from django_filters.rest_framework import DjangoFilterBackend
+
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from app.organizations.models import Organization
+from app.organizations.filters import OrganizationMembershipFilter
+from app.organizations.services.organization_invite_service import send_organization_invite
 from app.organizations.api.v1.serializers import (
     OrganizationSerializer, OrganizationCreateSerializer, OrganizationUpdateSerializer,
     OrganizationMembershipSerializer, InviteMemberSerializer, OrganizationMemberUpdateSerializer,
+)
+from app.organizations.services.organization_membership_service import (
+    add_member, remove_member, self_remove, update_role,
+)
+from app.organizations.services.organization_service import (
+    transfer_ownership, delete_organization,
 )
 
 from app.accounts.models import User
@@ -20,15 +31,7 @@ from core.utils import (
 from core.permissions.organization import (
     IsOrganizationAdmin, IsOrganizationMember, IsOrganizationOwner,
 )
-
-from app.organizations.services.organization_invite_service import send_organization_invite
-from app.organizations.services.organization_membership_service import (
-    add_member, remove_member, self_remove, update_role,
-)
-
-from app.organizations.services.organization_service import (
-    transfer_ownership, delete_organization,
-)
+from core.pagination import StandardPagination
 
 from services.invite_token_service import verify_invite_token
 
@@ -40,6 +43,9 @@ class OrganizationAPI(viewsets.ModelViewSet):
     Organization API (v1)
     """
     queryset = Organization.objects.all()
+    pagination_class = StandardPagination()
+    filterset_class = OrganizationMembershipFilter
+    search_fields = ["name"]
 
     def get_permissions(self):
         if self.action in ["list", "create"]:
@@ -51,7 +57,7 @@ class OrganizationAPI(viewsets.ModelViewSet):
         elif self.action in ["transfer_owner", "remove_member", "destroy"]:
             permissions = [IsAuthenticated, IsOrganizationOwner]
 
-        elif self.action == ["retrieve", "members", "self_remove_member"]:
+        elif self.action in ["retrieve", "members", "self_remove_member"]:
             permissions = [IsAuthenticated, IsOrganizationMember]
 
         else:
@@ -68,13 +74,37 @@ class OrganizationAPI(viewsets.ModelViewSet):
             return InviteMemberSerializer
         if self.action == "update_member":
             return OrganizationMemberUpdateSerializer
+        else:
+            return OrganizationSerializer
 
-    def list(self, request):
-        orgs = Organization.objects.filter(
-            memberships__user=request.user
-        ).distinct()
+    def get_ordering_fields(self):
+        if self.action == "members":
+            return ["joined_at"]
+        return ["created_at"]
+
+    def apply_filters(self, request, queryset):
+        self.ordering_fields = self.get_ordering_fields()
         
-        return Response(OrganizationSerializer(orgs, many=True).data, status=status.HTTP_200_OK)
+        django_filter = DjangoFilterBackend()
+        queryset = django_filter.filter_queryset(request, queryset, self)
+        
+        search_filter = SearchFilter()
+        queryset = search_filter.filter_queryset(request, queryset, self)
+        
+        ordering_filter = OrderingFilter()
+        queryset = ordering_filter.filter_queryset(request, queryset, self)
+        
+        return queryset
+        
+    def list(self, request):
+        orgs = self.apply_filters(request, Organization.objects.filter(memberships__user=request.user).distinct())
+        
+        page = self.pagination_class.paginate_queryset(orgs, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success",
+            "data": OrganizationSerializer(page, many=True).data}
+        )
 
     def create(self, request):
         serializer_class = self.get_serializer_class()
@@ -85,21 +115,24 @@ class OrganizationAPI(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         org = serializer.save()
-        return Response(
-            OrganizationSerializer(org).data,
+        return Response({
+            "message": "Organization created successfully",
+            "data": OrganizationSerializer(org).data},
             status=status.HTTP_201_CREATED,
         )
 
-    def retrieve(self, request, pk=None):
-        org = self.get_object()
+    def retrieve(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
+        
+        return Response({
+            "message": "Success",
+            "data": OrganizationSerializer(org).data}, 
+            status=status.HTTP_200_OK
+        )
 
-        serializer_class = self.get_serializer_class()
-        serializer = serializer_class(org)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def update(self, request, pk=None):
-        org = self.get_object()
+    def update(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         serializer_class = self.get_serializer_class()
@@ -112,10 +145,14 @@ class OrganizationAPI(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            "message": "Organization updated successfully", 
+            "data": OrganizationSerializer(org).data}, 
+            status=status.HTTP_200_OK
+        )
 
-    def destroy(self, request, pk=None):
-        org = self.get_object()
+    def destroy(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         delete_organization(
@@ -132,20 +169,22 @@ class OrganizationAPI(viewsets.ModelViewSet):
     # Custom Actions
     # --------------------------------------------------
     @action(detail=True, methods=["get"])
-    def members(self, request, pk=None):
-        org = self.get_object()
+    def members(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         members = get_all_org_memberships(org.id)
 
-        return Response(
-            OrganizationMembershipSerializer(members, many=True).data, 
-            status=status.HTTP_200_OK
+        page = self.pagination_class.paginate_queryset(members, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success",
+            "data": OrganizationMembershipSerializer(page, many=True).data}
         )
 
     @action(detail=True, methods=["delete"])
-    def self_remove_member(self, request, pk=None):
-        org = self.get_object()
+    def self_remove_member(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         self_remove(
@@ -159,8 +198,8 @@ class OrganizationAPI(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
-    def send_invite(self, request, pk=None):
-        org = self.get_object()
+    def send_invite(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         serializer_class = self.get_serializer_class()
@@ -181,14 +220,15 @@ class OrganizationAPI(viewsets.ModelViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            {"invite_token": invite_token},
+        return Response({
+            "message": "Invite sent successfully",
+            "invite_token": invite_token},
             status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])
-    def add_member(self, request, pk=None):
-        org = self.get_object()
+    def add_member(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         user_id = verify_invite_token(
@@ -206,14 +246,15 @@ class OrganizationAPI(viewsets.ModelViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            OrganizationMembershipSerializer(membership).data,
+        return Response({
+            "message": "Member added successfully",
+            "data": OrganizationMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["patch"])
-    def update_member(self, request, pk=None):
-        org = self.get_object()
+    def update_member(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         target_user = get_user(request.data.get("email"), kind="email")
@@ -237,14 +278,15 @@ class OrganizationAPI(viewsets.ModelViewSet):
             role=serializer.validated_data["role"],
         )
 
-        return Response(
-            OrganizationMembershipSerializer(membership).data,
+        return Response({
+            "message": "Member updated successfully",
+            "data": OrganizationMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["patch"])
-    def transfer_owner(self, request, pk=None):
-        org = self.get_object()
+    def transfer_owner(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         new_owner = get_user(request.data.get("email"), kind="email")
@@ -263,8 +305,8 @@ class OrganizationAPI(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["delete"])
-    def remove_member(self, request, pk=None):
-        org = self.get_object()
+    def remove_member(self, request):
+        org = get_org(request.query_params.get("org_id"))
         self.check_object_permissions(request, org)
 
         user = get_user(request.data.get("email"), kind="email")

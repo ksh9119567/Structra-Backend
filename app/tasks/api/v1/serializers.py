@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from core.permissions import project
-from tasks.models import Task
+from app.tasks.models import Task
 
 from app.projects.models import Project
 from app.accounts.models import User
@@ -9,16 +9,18 @@ from core.permissions.base import get_project_role
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.PrimaryKeyRelatedField(read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
     parent_task = serializers.CharField(source="parent.title", read_only=True)
-    assigned_to = serializers.EmailField(source="assigned_to.email", read_only=True)
-    created_by = serializers.EmailField(source="created_by.email", read_only=True)
+    assigned_to_email = serializers.EmailField(source="assigned_to.email", read_only=True)
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
     
     class Meta:
         model = Task
         fields = [
             "id", "project", "project_name", "parent", "parent_task", "title", "description",
-            "start_date", "due_date", "status", "priority", "task_type", "assigned_to", "created_by"
+            "start_date", "due_date", "status", "priority", "task_type", "assigned_to", "assigned_to_email", 
+            "created_by_email"
         ]
         
 class TaskCreateSerializer(serializers.ModelSerializer):
@@ -71,8 +73,33 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         
 
 class TaskUpdateSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    
     class Meta:
         model = Task
         fields = [
             "title", "description", "start_date", "due_date", "status", "priority", "task_type", "assigned_to"
         ]
+    
+    def update(self, instance, validated_data):
+        validated_data.pop('project', None)
+        validated_data.pop('parent', None)
+        validated_data.pop('created_by', None)
+        user = self.context["request"].user
+        
+        if instance.assigned_to:
+            # if request user is not creator or assigned_to, raise permission denied
+            if user != instance.created_by and user != instance.assigned_to:
+                raise serializers.ValidationError("You do not have permission to update this task.")
+        else:
+            if user != instance.created_by:
+                raise serializers.ValidationError("You do not have permission to update this task.")
+                
+        # If assigned_to is being set, ensure the user is a member of the task's project
+        assigned_user = validated_data.get('assigned_to', None)
+        if assigned_user is not None:
+            role = get_project_role(assigned_user, instance.project)
+            if role not in ["OWNER", "MANAGER", "CONTRIBUTOR"]:
+                raise serializers.ValidationError("User is not a member of the task's project.")
+
+        return super().update(instance, validated_data)

@@ -1,17 +1,21 @@
 import logging
 
+from django_filters.rest_framework import DjangoFilterBackend
+
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from app.teams.models import Team
 from app.teams.api.v1.serializers import (
     TeamSerializer, TeamCreateSerializer, TeamMembershipSerializer, TeamUpdateSerializer, 
     TeamMemberUpdateSerializer, InviteMemberSerializer,
 )
+from app.teams.filters import TeamMembershipFilter
 
 from app.accounts.models import User
 from core.utils import (
@@ -28,6 +32,7 @@ from app.teams.services.team_membership_service import (
 from app.teams.services.team_service import (
     transfer_team_ownership, delete_team,
 )
+from core.pagination import StandardPagination
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +42,16 @@ class TeamAPI(viewsets.ViewSet):
     Team API (v1)
     """
     queryset = Team.objects.all()
+    pagination_class = StandardPagination()
+    filterset_class = TeamMembershipFilter
+    search_fields = ["name", "description"]
     
     def get_permission(self):
         if self.action in ["list", "create", "retrieve"]:
             permissions = [IsAuthenticated]
         elif self.action in ["members", "self_remove_member"]:
             permissions = [IsAuthenticated, IsTeamMember]
-        elif self.action in ["update", "send_invite", "add_member", "update_member", "remove_member", "delete"]:
+        elif self.action in ["update", "send_invite", "add_member", "update_member", "remove_member", "destroy"]:
             permissions = [IsAuthenticated, IsOrgOwnerOrTeamManager]
         elif self.action in ["transfer_manager"]:
             permissions = [IsAuthenticated, IsTeamManager]
@@ -61,13 +69,36 @@ class TeamAPI(viewsets.ViewSet):
             return TeamUpdateSerializer
         if self.action == "update_member":
             return TeamMemberUpdateSerializer
+        else:
+            return TeamSerializer
 
-    def list(self, request):
-        teams = Team.objects.filter(memberships__user=request.user)
+    def get_ordering_fields(self):
+        if self.action == "members":
+            return ["joined_at"]
+        return ["created_at"]
         
-        return Response(
-            {"message": "Success", "data": TeamSerializer(teams, many=True).data},
-            status=status.HTTP_200_OK,
+    def apply_filters(self, request, queryset):
+        self.ordering_fields = self.get_ordering_fields()
+        
+        django_filter = DjangoFilterBackend()
+        queryset = django_filter.filter_queryset(request, queryset, self)
+        
+        search_filter = SearchFilter()
+        queryset = search_filter.filter_queryset(request, queryset, self)
+        
+        ordering_filter = OrderingFilter()
+        queryset = ordering_filter.filter_queryset(request, queryset, self)
+        
+        return queryset
+        
+    def list(self, request):
+        teams = self.apply_filters(request, Team.objects.filter(memberships__user=request.user))
+        
+        page = self.pagination_class.paginate_queryset(teams, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success", 
+            "data": TeamSerializer(page, many=True).data}
         )
 
     def create(self, request):
@@ -79,8 +110,9 @@ class TeamAPI(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
 
         team = serializer.save()
-        return Response(
-            {"message": "Team created successfully", "data": TeamSerializer(team).data},
+        return Response({
+            "message": "Team created successfully", 
+            "data": TeamSerializer(team).data},
             status=status.HTTP_201_CREATED,
         )
     
@@ -88,8 +120,9 @@ class TeamAPI(viewsets.ViewSet):
         team = get_team(request.query_params.get("team_id"))
         self.check_object_permissions(request, team)
 
-        return Response(
-            {"message": "Success", "data": TeamSerializer(team).data},
+        return Response({
+            "message": "Success", 
+            "data": TeamSerializer(team).data},
             status=status.HTTP_200_OK,
         )
         
@@ -108,12 +141,13 @@ class TeamAPI(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(
-            {"message": "Team updated successfully", "data": serializer.data},
+        return Response({
+            "message": "Team updated successfully", 
+            "data": serializer.data},
             status=status.HTTP_200_OK,
         )
 
-    def delete(self, request):
+    def destroy(self, request):
         team = get_team(request.data.get("team_id"))
         self.check_object_permissions(request, team)
 
@@ -122,8 +156,8 @@ class TeamAPI(viewsets.ViewSet):
             performed_by=request.user,
         )
 
-        return Response(
-            {"message": "Team deleted successfully"},
+        return Response({
+            "message": "Team deleted successfully"},
             status=status.HTTP_200_OK,
         )
         
@@ -134,19 +168,20 @@ class TeamAPI(viewsets.ViewSet):
     def members(self, request):
         team_id = request.query_params.get("team_id")
         team = get_team(team_id)
-
         self.check_object_permissions(request, team)
 
         members = get_all_team_memberships(team_id)
 
-        return Response(
-            {"message": "Success", "data": TeamMembershipSerializer(members, many=True).data},
-            status=status.HTTP_200_OK,
+        page = self.pagination_class.paginate_queryset(members, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success", 
+            "data": TeamMembershipSerializer(page, many=True).data}
         )
 
     @action(detail=True, methods=["delete"])
     def self_remove_member(self, request):
-        team = get_team(request.data.get("team_id"))
+        team = get_team(request.query_params.get("team_id"))
         self.check_object_permissions(request, team)
 
         self_remove_team_member(
@@ -154,10 +189,11 @@ class TeamAPI(viewsets.ViewSet):
             user=request.user,
         )
 
-        return Response(
-            {"message": "Member removed successfully"},
+        return Response({
+            "message": "Member removed successfully"},
             status=status.HTTP_200_OK,
         )
+        
     @action(detail=True, methods=["post"])
     def send_invite(self, request):
         team = get_team(request.data.get("team_id"))
@@ -181,8 +217,9 @@ class TeamAPI(viewsets.ViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            {"message": "Invite sent", "invite_token": invite_token},
+        return Response({
+            "message": "Invite sent", 
+            "invite_token": invite_token},
             status=status.HTTP_200_OK,
         )
 
@@ -206,8 +243,9 @@ class TeamAPI(viewsets.ViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            TeamMembershipSerializer(membership).data,
+        return Response({
+            "message": "Member added successfully",
+            "data": TeamMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
 
@@ -237,11 +275,9 @@ class TeamAPI(viewsets.ViewSet):
             role=serializer.validated_data["role"],
         )
 
-        return Response(
-            {
-                "message": "Team member updated successfully",
-                "data": TeamMembershipSerializer(membership).data,
-            },
+        return Response({
+            "message": "Team member updated successfully",
+            "data": TeamMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
 
@@ -259,8 +295,8 @@ class TeamAPI(viewsets.ViewSet):
             user=user,
         )
 
-        return Response(
-            {"message": "Member removed successfully"},
+        return Response({
+            "message": "Member removed successfully"},
             status=status.HTTP_200_OK,
         )
 
@@ -279,7 +315,8 @@ class TeamAPI(viewsets.ViewSet):
             performed_by=request.user,
         )
 
-        return Response(
-            {"message": "Team manager updated successfully", "data": TeamSerializer(team).data},
+        return Response({
+            "message": "Team manager updated successfully", 
+            "data": TeamSerializer(team).data},
             status=status.HTTP_200_OK,
         )

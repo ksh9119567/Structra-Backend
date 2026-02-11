@@ -11,12 +11,16 @@ def get_user(identifier, kind="email"):
     """
     Returns a user instance by email or phone number.
     """
-    if kind == "email":
-        return User.objects.filter(email__iexact=identifier).first()
-    elif kind == "phone":
-        return User.objects.filter(phone_no=identifier).first()
-    return None
-
+    if identifier:
+        try:
+            if kind == "email":
+                return User.objects.filter(email__iexact=identifier).first()
+            elif kind == "phone":
+                return User.objects.filter(phone_no=identifier).first()
+        except Exception:
+            raise ValidationError("User not found")
+    raise ValidationError("User ID is required")
+    
 def get_org(org_id):
     """
     Returns a organization instance by org_id.
@@ -148,3 +152,15 @@ def get_task(task_id):
         except Exception as e:
             raise Exception(e)
     raise ValidationError("Task ID is required")
+
+def get_all_task(project):
+    """
+    Returns a list of tasks by project_id.
+    """
+    if project:
+        try:
+            return Task.objects.filter(project = project)
+        except Exception as e:
+            raise Exception(e)
+    raise ValidationError("Project ID is required")
+

@@ -1,16 +1,20 @@
 import logging
 
+from django_filters.rest_framework import DjangoFilterBackend
+
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from app.projects.models import Project
 from app.projects.api.v1.serializers import (
     ProjectSerializer, ProjectCreateSerializer, ProjectMembershipSerializer, ProjectUpdateSerializer, 
     ProjectMemberUpdateSerializer, InviteMemberSerializer,
 )
+from app.projects.filters import ProjectFilter, ProjectMembershipFilter
 
 from app.accounts.models import User
 from core.utils import (
@@ -21,6 +25,7 @@ from core.permissions.project import IsProjectMember
 from core.permissions.combined import (
     IsOrgOwnerOrProjectManager, IsOrgOwnerOrProjectOwner,
 )
+from core.pagination import StandardPagination
 
 from services.invite_token_service import verify_invite_token
 from app.projects.services.project_invite_service import send_project_invite
@@ -39,7 +44,10 @@ class ProjectAPI(viewsets.ModelViewSet):
     Project API (v1)
     """
     queryset = Project.objects.all()
+    pagination_class = StandardPagination()
+    search_fields = ["name", "description"]
 
+    
     def get_permissions(self):
         if self.action in ["list", "create"]:
             permissions = [IsAuthenticated]
@@ -67,13 +75,43 @@ class ProjectAPI(viewsets.ModelViewSet):
             return InviteMemberSerializer
         if self.action == "update_member":
             return ProjectMemberUpdateSerializer
+        else:
+            return ProjectSerializer
 
+    def get_filterset_class(self):
+        if self.action == "members":
+            return ProjectMembershipFilter
+        return ProjectFilter
+    
+    def get_ordering_fields(self):
+        if self.action == "members":
+            return ["joined_at"]
+        return ["created_at"]
+    
+    def apply_filters(self, request, queryset):
+        self.filterset_class = self.get_filterset_class()
+        self.ordering_fields = self.get_ordering_fields()
+        
+        django_filter = DjangoFilterBackend()
+        queryset = django_filter.filter_queryset(request, queryset, self)
+        
+        search_filter = SearchFilter()
+        queryset = search_filter.filter_queryset(request, queryset, self)
+        
+        ordering_filter = OrderingFilter()
+        queryset = ordering_filter.filter_queryset(request, queryset, self)
+        
+        return queryset
+        
     def list(self, request):
-        projects = Project.objects.filter(
-            members=request.user
-        ).distinct()
+        projects = self.apply_filters(request, Project.objects.filter(members=request.user).distinct())
 
-        return Response(ProjectSerializer(projects, many=True).data, status=status.HTTP_200_OK)
+        page = self.pagination_class.paginate_queryset(projects, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success",
+            "data": ProjectSerializer(page, many=True).data}
+        )
 
     def create(self, request):
         serializer_class = self.get_serializer_class()
@@ -84,8 +122,9 @@ class ProjectAPI(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         project = serializer.save()
-        return Response(
-            ProjectSerializer(project).data,
+        return Response({
+            "message": "Project created successfully",    
+            "data": ProjectSerializer(project).data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -93,8 +132,9 @@ class ProjectAPI(viewsets.ModelViewSet):
         project = get_project(request.query_params.get("project_id"))
         self.check_object_permissions(request, project)
 
-        return Response(
-            {"message": "Success", "data": ProjectSerializer(project).data},
+        return Response({
+            "message": "Success", 
+            "data": ProjectSerializer(project).data},
             status=status.HTTP_200_OK,
         )
 
@@ -112,11 +152,9 @@ class ProjectAPI(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(
-            {
-                "message": "Project updated successfully",
-                "data": serializer.data,
-            },
+        return Response({
+            "message": "Project updated successfully",
+            "data": ProjectSerializer(project).data},
             status=status.HTTP_200_OK,
         )
     
@@ -129,8 +167,8 @@ class ProjectAPI(viewsets.ModelViewSet):
             performed_by=request.user,
         )
 
-        return Response(
-            {"message": "Project deleted successfully"},
+        return Response({
+            "message": "Project deleted successfully"},
             status=status.HTTP_200_OK,
         )
 
@@ -139,21 +177,21 @@ class ProjectAPI(viewsets.ModelViewSet):
     # --------------------------------------------------
     @action(detail=True, methods=["get"])
     def members(self, request):
-        project_id = request.query_params.get("project_id")
-        project = get_project(project_id)
-
+        project = get_project(request.query_params.get("project_id"))
         self.check_object_permissions(request, project)
 
-        members = get_all_project_memberships(project_id)
+        members = self.apply_filters(request, get_all_project_memberships(project.id))
 
-        return Response(
-            {"message": "Success", "data": ProjectMembershipSerializer(members, many=True).data},
-            status=status.HTTP_200_OK,
+        page = self.pagination_class.paginate_queryset(members, request)
+        
+        return self.pagination_class.get_paginated_response({
+            "message": "Success", 
+            "data": ProjectMembershipSerializer(page, many=True).data}
         )
 
     @action(detail=True, methods=["delete"])
     def self_remove_member(self, request):
-        project = get_project(request.data.get("project_id"))
+        project = get_project(request.query_params.get("project_id"))
         self.check_object_permissions(request, project)
 
         self_remove_project_member(
@@ -161,8 +199,8 @@ class ProjectAPI(viewsets.ModelViewSet):
             user=request.user,
         )
 
-        return Response(
-            {"message": "Member removed successfully"},
+        return Response({
+            "message": "Member removed successfully"},
             status=status.HTTP_200_OK,
         )
 
@@ -189,8 +227,9 @@ class ProjectAPI(viewsets.ModelViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            {"message": "Invite sent", "invite_token": invite_token},
+        return Response({
+            "message": "Invite sent", 
+            "invite_token": invite_token},
             status=status.HTTP_200_OK,
         )
 
@@ -214,8 +253,9 @@ class ProjectAPI(viewsets.ModelViewSet):
             role=request.data.get("role", "MEMBER"),
         )
 
-        return Response(
-            ProjectMembershipSerializer(membership).data,
+        return Response({
+            "message": "Member added successfully",
+            "data": ProjectMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
 
@@ -245,13 +285,12 @@ class ProjectAPI(viewsets.ModelViewSet):
             role=serializer.validated_data["role"],
         )
 
-        return Response(
-            {
-                "message": "Project member updated successfully",
-                "data": ProjectMembershipSerializer(membership).data,
-            },
+        return Response({
+            "message": "Project member updated successfully",
+            "data": ProjectMembershipSerializer(membership).data},
             status=status.HTTP_200_OK,
         )
+        
     @action(detail=True, methods=["delete"])
     def remove_member(self, request):
         project = get_project(request.data.get("project_id"))
@@ -266,8 +305,8 @@ class ProjectAPI(viewsets.ModelViewSet):
             user=user,
         )
 
-        return Response(
-            {"message": "Member removed successfully"},
+        return Response({
+            "message": "Member removed successfully"},
             status=status.HTTP_200_OK,
         )
 
@@ -286,8 +325,8 @@ class ProjectAPI(viewsets.ModelViewSet):
             performed_by=request.user,
         )
 
-        return Response(
-            {"message": "Project owner updated successfully"},
+        return Response({
+            "message": "Project owner updated successfully"},
             status=status.HTTP_200_OK,
         )
 

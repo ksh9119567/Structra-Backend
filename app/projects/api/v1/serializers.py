@@ -17,7 +17,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             "id", "name", "description", "organization", "organization_name",
-            "team", "team_name", "created_by", "created_by_email", "member_count"
+            "team", "team_name", "status", "created_by", "created_by_email", "member_count"
         ]
         
     def get_member_count(self, obj):
@@ -56,7 +56,7 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Team not found.")
             
             role = get_team_role(request.user, team)
-            if role not in ["OWNER", "ADMIN"]:
+            if role != "MANAGER":
                 raise serializers.ValidationError("You do not have permission to create a project in this team.")
             
             attrs["team"] = team
@@ -71,10 +71,12 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         project = Project.objects.create(created_by = request.user, **validated_data)
         
         if org:
-            team.organizarion
+            project.organization = org
+            project.save()
         
         if team:
-            team.team
+            project.team = team
+            project.save()
             
         ProjectMembership.objects.create(user=request.user, project = project, role="OWNER")
         return project
@@ -93,7 +95,7 @@ class ProjectUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Project
-        fields = ["name", "description"]
+        fields = ["name", "description", "status"]
         
         
 class InviteMemberSerializer(serializers.Serializer):
