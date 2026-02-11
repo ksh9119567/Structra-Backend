@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
-from .models import Project, ProjectMembership
+from app.projects.models import Project, ProjectMembership
+
+from app.organizations.models import Organization
+from app.teams.models import Team
 from core.permissions.base import get_org_role, get_team_role, get_project_role
 from core.constants import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
 
@@ -14,7 +17,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             "id", "name", "description", "organization", "organization_name",
-            "team", "team_name", "created_by", "created_by_email", "member_count"
+            "team", "team_name", "status", "created_by", "created_by_email", "member_count"
         ]
         
     def get_member_count(self, obj):
@@ -35,7 +38,6 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         team_id = attrs.get("team_id", None)
         
         if org_id:
-            from app.organizations.models import Organization
             try:
                 org = Organization.objects.get(id=org_id)
             except Organization.DoesNotExist:
@@ -48,14 +50,13 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
             attrs["organization"] = org
         
         if team_id:
-            from app.teams.models import Team
             try:
                 team = Team.objects.get(id=team_id)
             except Team.DoesNotExist:
                 raise serializers.ValidationError("Team not found.")
             
             role = get_team_role(request.user, team)
-            if role not in ["OWNER", "ADMIN"]:
+            if role != "MANAGER":
                 raise serializers.ValidationError("You do not have permission to create a project in this team.")
             
             attrs["team"] = team
@@ -64,16 +65,18 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         request = self.context["request"]
-        org = validated_data.pop("organizatiob", None)
+        org = validated_data.pop("organization", None)
         team = validated_data.pop("team", None)
         
         project = Project.objects.create(created_by = request.user, **validated_data)
         
         if org:
-            team.organizarion
+            project.organization = org
+            project.save()
         
         if team:
-            team.team
+            project.team = team
+            project.save()
             
         ProjectMembership.objects.create(user=request.user, project = project, role="OWNER")
         return project
@@ -92,7 +95,7 @@ class ProjectUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Project
-        fields = ["name", "description"]
+        fields = ["name", "description", "status"]
         
         
 class InviteMemberSerializer(serializers.Serializer):

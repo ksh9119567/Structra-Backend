@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 class TimeStampedModel(models.Model):
@@ -6,3 +8,7 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+        
+    

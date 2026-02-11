@@ -4,18 +4,23 @@ from app.accounts.models import User
 from app.organizations.models import Organization, OrganizationMembership
 from app.teams.models import Team, TeamMembership
 from app.projects.models import Project, ProjectMembership
+from app.tasks.models import Task
 
 
 def get_user(identifier, kind="email"):
     """
     Returns a user instance by email or phone number.
     """
-    if kind == "email":
-        return User.objects.filter(email__iexact=identifier).first()
-    elif kind == "phone":
-        return User.objects.filter(phone_no=identifier).first()
-    return None
-
+    if identifier:
+        try:
+            if kind == "email":
+                return User.objects.filter(email__iexact=identifier).first()
+            elif kind == "phone":
+                return User.objects.filter(phone_no=identifier).first()
+        except Exception:
+            raise ValidationError("User not found")
+    raise ValidationError("User ID is required")
+    
 def get_org(org_id):
     """
     Returns a organization instance by org_id.
@@ -132,3 +137,30 @@ def get_project_membership(project_id, user):
         except Exception as e:
             raise Exception(e)
     raise ValidationError("project ID and user are required")
+
+
+def get_task(task_id):
+    """
+    Returns a task instance by task_id.
+    """
+    if task_id:
+        try:
+            obj = Task.objects.filter(id=task_id).first()
+            if not obj:
+                raise NotFound("Task not found")
+            return obj
+        except Exception as e:
+            raise Exception(e)
+    raise ValidationError("Task ID is required")
+
+def get_all_task(project):
+    """
+    Returns a list of tasks by project_id.
+    """
+    if project:
+        try:
+            return Task.objects.filter(project = project)
+        except Exception as e:
+            raise Exception(e)
+    raise ValidationError("Project ID is required")
+
