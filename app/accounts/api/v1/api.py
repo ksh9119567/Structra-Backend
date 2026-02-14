@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.generics import CreateAPIView
@@ -25,6 +27,8 @@ from app.accounts.services.password_reset_service import (
     request_password_reset, verify_password_reset_otp, reset_password,
 )
 
+logger = logging.getLogger(__name__)
+
 # -------------------------------
 # Registration and Authentication
 # -------------------------------
@@ -34,11 +38,13 @@ class RegisterAPI(CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"User registration attempt for email: {request.data.get('email')}")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
         refresh = login_user(user)
+        logger.info(f"User registered successfully: {user.email}")
         return Response({
             "message": "User created successfully",
             "user": UserSerializer(user).data,
@@ -51,6 +57,7 @@ class LoginAPI(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
     def post(self, request):
+        logger.info(f"Login attempt for email: {request.data.get('email')}")
         response = super().post(request)
         if response.status_code == status.HTTP_200_OK:
             refresh_token = response.data.get('refresh')
@@ -60,7 +67,9 @@ class LoginAPI(TokenObtainPairView):
                     uid = token_obj.get('user_id') or token_obj.get('user')
                     if uid:
                         store_refresh_token(uid, refresh_token)
-                except TokenError:
+                        logger.info(f"User logged in successfully, user_id: {uid}")
+                except TokenError as e:
+                    logger.error(f"Token error during login: {str(e)}")
                     pass
         return response
                 
@@ -69,10 +78,13 @@ class LoginAPI(TokenObtainPairView):
 
 class RefreshAPI(TokenRefreshView):
     def post(self, request):
+        logger.info("Token refresh attempt")
         old_refresh = request.data.get("refresh")
         if not old_refresh:
+            logger.warning("Refresh token not provided")
             return Response({"message": "Refresh token required"}, status=status.HTTP_400_BAD_REQUEST)
         if not is_refresh_token_valid(old_refresh):
+            logger.warning("Invalid refresh token provided")
             return Response({"message": "Invalid refresh token"}, status=401)
 
         response = super().post(request)
@@ -82,6 +94,7 @@ class RefreshAPI(TokenRefreshView):
             token = RefreshToken(new_refresh)
             store_refresh_token(token["user_id"], new_refresh)
             delete_refresh_token(old_refresh)
+            logger.info("Token refreshed successfully")
 
         return response
 
@@ -90,16 +103,19 @@ class LogoutAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        logger.info(f"Logout attempt for user: {request.user.email}")
         logout_user(
             refresh_token=request.data.get("refresh"),
             request_user=request.user,
         )
+        logger.info(f"User logged out successfully: {request.user.email}")
         return Response({"message": "Logged out"}, status=205)
 
 class GetUserAPI(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        logger.debug(f"Get user info request for: {request.user.email}")
         return Response({"message": "Success", "data": UserSerializer(request.user).data}, status=status.HTTP_200_OK)
     
 # ---------------------------------------
@@ -110,6 +126,7 @@ class GetOTPAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"OTP request for {request.data.get('kind')}: {request.data.get('identifier')}")
         serializer = GetOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -124,6 +141,7 @@ class VerifyOTPAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"OTP verification for {request.data.get('kind')}: {request.data.get('identifier')}")
         serializer = VerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -136,6 +154,7 @@ class VerifyOTPAPI(APIView):
 
         user = get_user(serializer.validated_data["identifier"], serializer.validated_data["kind"])
         if not user:
+            logger.warning(f"User not found after OTP verification: {serializer.validated_data['identifier']}")
             return Response({"message": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
         
         if serializer.validated_data["kind"] == "email":
@@ -143,6 +162,7 @@ class VerifyOTPAPI(APIView):
         else:
             user.is_phone_verified = True
         user.save()
+        logger.info(f"OTP verified successfully for user: {user.email}")
         
         return Response({"message": "Verified"}, status=status.HTTP_200_OK)
 
@@ -150,6 +170,7 @@ class OTPLoginAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"OTP login attempt for {request.data.get('kind')}: {request.data.get('identifier')}")
         serializer = VerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -166,6 +187,7 @@ class OTPLoginAPI(APIView):
         )
 
         refresh = login_user(user)
+        logger.info(f"User logged in via OTP: {user.email}")
         return Response({
             "message": "User logged in successfully",
             "user": UserSerializer(user).data,
@@ -182,6 +204,7 @@ class ForgotPasswordRequestAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"Password reset request for {request.data.get('kind')}: {request.data.get('identifier')}")
         serializer = ForgotPasswordRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -195,6 +218,7 @@ class ForgotPasswordVerifyAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        logger.info(f"Password reset OTP verification for {request.data.get('kind')}: {request.data.get('identifier')}")
         serializer = ForgotPasswordVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -205,8 +229,10 @@ class ForgotPasswordResetAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
     def put(self, request):
+        logger.info("Password reset with token")
         serializer = ForgotPasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         reset_password(**serializer.validated_data)
+        logger.info("Password reset successfully")
         return Response({"message": "Password updated"})

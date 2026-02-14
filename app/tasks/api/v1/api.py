@@ -68,12 +68,15 @@ class TaskAPI(viewsets.ViewSet):
         return queryset
         
     def list(self, request):
-        project = get_project(request.query_params.get("project_id"))
+        project_id = request.query_params.get("project_id")
+        logger.info(f"Listing tasks for project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
         
         tasks = self.apply_filters(request, get_all_task(project))
         
         page = self.pagination_class.paginate_queryset(tasks, request)
+        logger.debug(f"Found {len(page)} tasks for project: {project.name}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success",
@@ -81,7 +84,7 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def create(self, request):
-        self.check_object_permissions(request, serializer.validated_data["project"])
+        logger.info(f"Creating task by user: {request.user.email}, title: {request.data.get('title')}")
         
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(
@@ -90,7 +93,10 @@ class TaskAPI(viewsets.ViewSet):
         )
         serializer.is_valid(raise_exception=True)
         
+        self.check_object_permissions(request, serializer.validated_data["project"])
+        
         task = serializer.save()
+        logger.info(f"Task created successfully: {task.title} by {request.user.email}")
         
         return Response({
             "message": "Task created successfully",
@@ -99,8 +105,11 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def retrieve(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Retrieving task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
+        logger.debug(f"Task retrieved: {task.title}")
         
         return Response({
             "message": "Success",
@@ -109,7 +118,9 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def update(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Updating task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
         
         serializer_class = TaskUpdateSerializer
@@ -121,6 +132,7 @@ class TaskAPI(viewsets.ViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        logger.info(f"Task updated successfully: {task.title}")
         
         return Response({
             "message": "Task updated successfully",
@@ -129,13 +141,16 @@ class TaskAPI(viewsets.ViewSet):
         )
         
     def destroy(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Deleting task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
         
         delete_task(
             task=task, 
             performed_by=request.user
         )
+        logger.info(f"Task deleted successfully: {task.title}")
         
         return Response(
             {"message": "Task deleted successfully"},

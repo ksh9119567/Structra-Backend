@@ -92,9 +92,11 @@ class TeamAPI(viewsets.ViewSet):
         return queryset
         
     def list(self, request):
+        logger.info(f"Listing teams for user: {request.user.email}")
         teams = self.apply_filters(request, Team.objects.filter(memberships__user=request.user))
         
         page = self.pagination_class.paginate_queryset(teams, request)
+        logger.debug(f"Found {len(page)} teams for user: {request.user.email}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success", 
@@ -102,6 +104,7 @@ class TeamAPI(viewsets.ViewSet):
         )
 
     def create(self, request):
+        logger.info(f"Creating team by user: {request.user.email}, name: {request.data.get('name')}")
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(
             data=request.data,
@@ -110,6 +113,7 @@ class TeamAPI(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
 
         team = serializer.save()
+        logger.info(f"Team created successfully: {team.name} by {request.user.email}")
         return Response({
             "message": "Team created successfully", 
             "data": TeamSerializer(team).data},
@@ -117,8 +121,11 @@ class TeamAPI(viewsets.ViewSet):
         )
     
     def retrieve(self, request):
-        team = get_team(request.query_params.get("team_id"))
+        team_id = request.query_params.get("team_id")
+        logger.info(f"Retrieving team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
+        logger.debug(f"Team retrieved: {team.name}")
 
         return Response({
             "message": "Success", 
@@ -127,7 +134,9 @@ class TeamAPI(viewsets.ViewSet):
         )
         
     def update(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        logger.info(f"Updating team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         serializer_class = self.get_serializer_class()
@@ -140,6 +149,7 @@ class TeamAPI(viewsets.ViewSet):
         
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        logger.info(f"Team updated successfully: {team.name}")
 
         return Response({
             "message": "Team updated successfully", 
@@ -148,13 +158,16 @@ class TeamAPI(viewsets.ViewSet):
         )
 
     def destroy(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        logger.info(f"Deleting team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         delete_team(
             team=team,
             performed_by=request.user,
         )
+        logger.info(f"Team deleted successfully: {team.name}")
 
         return Response({
             "message": "Team deleted successfully"},
@@ -167,12 +180,14 @@ class TeamAPI(viewsets.ViewSet):
     @action(detail=True, methods=["get"])
     def members(self, request):
         team_id = request.query_params.get("team_id")
+        logger.info(f"Listing members for team: {team_id} by user: {request.user.email}")
         team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         members = get_all_team_memberships(team_id)
 
         page = self.pagination_class.paginate_queryset(members, request)
+        logger.debug(f"Found {len(page)} members for team: {team.name}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success", 
@@ -181,13 +196,16 @@ class TeamAPI(viewsets.ViewSet):
 
     @action(detail=True, methods=["delete"])
     def self_remove_member(self, request):
-        team = get_team(request.query_params.get("team_id"))
+        team_id = request.query_params.get("team_id")
+        logger.info(f"Self-remove from team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         self_remove_team_member(
             team=team,
             user=request.user,
         )
+        logger.info(f"User self-removed from team: {team.name}")
 
         return Response({
             "message": "Member removed successfully"},
@@ -196,7 +214,10 @@ class TeamAPI(viewsets.ViewSet):
         
     @action(detail=True, methods=["post"])
     def send_invite(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        email = request.data.get("email")
+        logger.info(f"Sending invite to {email} for team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         serializer_class = self.get_serializer_class()
@@ -208,6 +229,7 @@ class TeamAPI(viewsets.ViewSet):
 
         user = get_user(serializer.validated_data["email"], kind="email")
         if not user:
+            logger.warning(f"User not found for invite: {email}")
             raise NotFound("User not found")
 
         invite_token = send_team_invite(
@@ -216,6 +238,7 @@ class TeamAPI(viewsets.ViewSet):
             invited_by=request.user,
             role=request.data.get("role", "MEMBER"),
         )
+        logger.info(f"Invite sent successfully to {email} for team: {team.name}")
 
         return Response({
             "message": "Invite sent", 
@@ -225,7 +248,9 @@ class TeamAPI(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"])
     def add_member(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        logger.info(f"Adding member to team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
         user_id = verify_invite_token(
@@ -233,6 +258,7 @@ class TeamAPI(viewsets.ViewSet):
             token=request.data.get("invite_token"),
         )
         if not user_id:
+            logger.warning(f"Invalid invite token for team: {team.name}")
             raise ValidationError("Invalid invite token")
 
         user = User.objects.get(id=user_id)
@@ -242,6 +268,7 @@ class TeamAPI(viewsets.ViewSet):
             user=user,
             role=request.data.get("role", "MEMBER"),
         )
+        logger.info(f"Member {user.email} added to team: {team.name}")
 
         return Response({
             "message": "Member added successfully",
@@ -251,11 +278,15 @@ class TeamAPI(viewsets.ViewSet):
 
     @action(detail=True, methods=["patch"])
     def update_member(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        email = request.data.get("email")
+        logger.info(f"Updating member {email} in team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
-        target_user = get_user(request.data.get("email"), kind="email")
+        target_user = get_user(email, kind="email")
         if not target_user:
+            logger.warning(f"User not found for update: {email}")
             raise NotFound("User not found")
 
         serializer_class = self.get_serializer_class()
@@ -274,6 +305,7 @@ class TeamAPI(viewsets.ViewSet):
             user=target_user,
             role=serializer.validated_data["role"],
         )
+        logger.info(f"Member {email} updated in team: {team.name}")
 
         return Response({
             "message": "Team member updated successfully",
@@ -283,17 +315,22 @@ class TeamAPI(viewsets.ViewSet):
 
     @action(detail=True, methods=["delete"])
     def remove_member(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        email = request.data.get("email")
+        logger.info(f"Removing member {email} from team: {team_id} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
-        user = get_user(request.data.get("email"), kind="email")
+        user = get_user(email, kind="email")
         if not user:
+            logger.warning(f"User not found for removal: {email}")
             raise NotFound("User not found")
 
         remove_team_member(
             team=team,
             user=user,
         )
+        logger.info(f"Member {email} removed from team: {team.name}")
 
         return Response({
             "message": "Member removed successfully"},
@@ -302,11 +339,15 @@ class TeamAPI(viewsets.ViewSet):
 
     @action(detail=True, methods=["patch"])
     def transfer_manager(self, request):
-        team = get_team(request.data.get("team_id"))
+        team_id = request.data.get("team_id")
+        email = request.data.get("email")
+        logger.info(f"Transferring manager of team: {team_id} to {email} by user: {request.user.email}")
+        team = get_team(team_id)
         self.check_object_permissions(request, team)
 
-        new_owner = get_user(request.data.get("email"), kind="email")
+        new_owner = get_user(email, kind="email")
         if not new_owner:
+            logger.warning(f"User not found for manager transfer: {email}")
             raise NotFound("User not found")
 
         transfer_team_ownership(
@@ -314,6 +355,7 @@ class TeamAPI(viewsets.ViewSet):
             new_owner=new_owner,
             performed_by=request.user,
         )
+        logger.info(f"Manager transferred to {email} for team: {team.name}")
 
         return Response({
             "message": "Team manager updated successfully", 

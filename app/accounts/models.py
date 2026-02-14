@@ -1,15 +1,21 @@
 import uuid
+import logging
 
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
+
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
+        logger.info(f"Creating user with email: {email}")
         if not email:
+            logger.error("Email is required for user creation")
             raise ValueError("Email is required")
         if not password:
+            logger.error("Password is required for user creation")
             raise ValueError("Password is required")
         
         email = self.normalize_email(email)
@@ -18,21 +24,28 @@ class UserManager(BaseUserManager):
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
+        logger.info(f"User created successfully: {email}")
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        logger.info(f"Creating superuser with email: {email}")
         if not password:
+            logger.error("Superuser must have a password")
             raise ValueError("Superuser must have a password")
 
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
         if extra_fields.get("is_staff") is not True:
+            logger.error("Superuser must have is_staff=True")
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
+            logger.error("Superuser must have is_superuser=True")
             raise ValueError("Superuser must have is_superuser=True.")
 
-        return self.create_user(email, password, **extra_fields)
+        user = self.create_user(email, password, **extra_fields)
+        logger.info(f"Superuser created successfully: {email}")
+        return user
         
         
 class User(AbstractBaseUser, PermissionsMixin):

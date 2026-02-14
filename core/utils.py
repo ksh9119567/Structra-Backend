@@ -1,3 +1,4 @@
+import logging
 from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
 
 from app.accounts.models import User
@@ -6,33 +7,48 @@ from app.teams.models import Team, TeamMembership
 from app.projects.models import Project, ProjectMembership
 from app.tasks.models import Task
 
+logger = logging.getLogger(__name__)
+
 
 def get_user(identifier, kind="email"):
     """
     Returns a user instance by email or phone number.
     """
+    logger.debug(f"Getting user by {kind}: {identifier}")
     if identifier:
         try:
             if kind == "email":
-                return User.objects.filter(email__iexact=identifier).first()
+                user = User.objects.filter(email__iexact=identifier).first()
             elif kind == "phone":
-                return User.objects.filter(phone_no=identifier).first()
-        except Exception:
+                user = User.objects.filter(phone_no=identifier).first()
+            if user:
+                logger.debug(f"User found: {user.id}")
+            else:
+                logger.warning(f"User not found for {kind}: {identifier}")
+            return user
+        except Exception as e:
+            logger.error(f"Error getting user by {kind}: {identifier}, error: {str(e)}")
             raise ValidationError("User not found")
+    logger.warning("User ID is required but not provided")
     raise ValidationError("User ID is required")
     
 def get_org(org_id):
     """
     Returns a organization instance by org_id.
     """
+    logger.debug(f"Getting organization: {org_id}")
     if org_id:
         try:
             obj = Organization.objects.filter(id=org_id).first()
             if not obj:
+                logger.warning(f"Organization not found: {org_id}")
                 raise NotFound("Organization not found")
+            logger.debug(f"Organization found: {obj.name}")
             return obj
         except Exception as e:
+            logger.error(f"Error getting organization {org_id}: {str(e)}")
             raise Exception(e)
+    logger.warning("Organization ID is required but not provided")
     raise ValidationError("Organization ID is required")
 
 def get_org_membership(org_id, user):
@@ -64,14 +80,19 @@ def get_team(team_id):
     """
     Returns a team instance by team_id.
     """
+    logger.debug(f"Getting team: {team_id}")
     if team_id:
         try:
             obj = Team.objects.filter(id=team_id).first()
             if not obj:
+                logger.warning(f"Team not found: {team_id}")
                 raise NotFound("Team not found")
+            logger.debug(f"Team found: {obj.name}")
             return obj
         except Exception as e:
+            logger.error(f"Error getting team {team_id}: {str(e)}")
             raise Exception(e)
+    logger.warning("Team ID is required but not provided")
     raise ValidationError("Team ID is required")
 
 def get_all_team_memberships(team_id):
@@ -103,14 +124,19 @@ def get_project(project_id):
     """
     Returns a project instance by project_id".
     """
+    logger.debug(f"Getting project: {project_id}")
     if project_id:
         try:
             obj = Project.objects.filter(id = project_id).first()
             if not obj:
+                logger.warning(f"Project not found: {project_id}")
                 raise NotFound("Project not found")
+            logger.debug(f"Project found: {obj.name}")
             return obj
         except Exception as e:
+            logger.error(f"Error getting project {project_id}: {str(e)}")
             raise Exception(e)
+    logger.warning("Project ID is required but not provided")
     raise ValidationError("Project ID is required")
 
 def get_all_project_memberships(project_id):
@@ -143,14 +169,19 @@ def get_task(task_id):
     """
     Returns a task instance by task_id.
     """
+    logger.debug(f"Getting task: {task_id}")
     if task_id:
         try:
             obj = Task.objects.filter(id=task_id).first()
             if not obj:
+                logger.warning(f"Task not found: {task_id}")
                 raise NotFound("Task not found")
+            logger.debug(f"Task found: {obj.title}")
             return obj
         except Exception as e:
+            logger.error(f"Error getting task {task_id}: {str(e)}")
             raise Exception(e)
+    logger.warning("Task ID is required but not provided")
     raise ValidationError("Task ID is required")
 
 def get_all_task(project):

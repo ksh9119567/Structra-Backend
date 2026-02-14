@@ -104,9 +104,11 @@ class ProjectAPI(viewsets.ModelViewSet):
         return queryset
         
     def list(self, request):
+        logger.info(f"Listing projects for user: {request.user.email}")
         projects = self.apply_filters(request, Project.objects.filter(members=request.user).distinct())
 
         page = self.pagination_class.paginate_queryset(projects, request)
+        logger.debug(f"Found {len(page)} projects for user: {request.user.email}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success",
@@ -114,6 +116,7 @@ class ProjectAPI(viewsets.ModelViewSet):
         )
 
     def create(self, request):
+        logger.info(f"Creating project by user: {request.user.email}, name: {request.data.get('name')}")
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(
             data=request.data,
@@ -122,6 +125,7 @@ class ProjectAPI(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         project = serializer.save()
+        logger.info(f"Project created successfully: {project.name} by {request.user.email}")
         return Response({
             "message": "Project created successfully",    
             "data": ProjectSerializer(project).data},
@@ -129,8 +133,11 @@ class ProjectAPI(viewsets.ModelViewSet):
         )
 
     def retrieve(self, request):
-        project = get_project(request.query_params.get("project_id"))
+        project_id = request.query_params.get("project_id")
+        logger.info(f"Retrieving project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
+        logger.debug(f"Project retrieved: {project.name}")
 
         return Response({
             "message": "Success", 
@@ -139,7 +146,9 @@ class ProjectAPI(viewsets.ModelViewSet):
         )
 
     def update(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        logger.info(f"Updating project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         serializer_class = self.get_serializer_class()
@@ -151,6 +160,7 @@ class ProjectAPI(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        logger.info(f"Project updated successfully: {project.name}")
 
         return Response({
             "message": "Project updated successfully",
@@ -159,13 +169,16 @@ class ProjectAPI(viewsets.ModelViewSet):
         )
     
     def destroy(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        logger.info(f"Deleting project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         delete_project(
             project=project,
             performed_by=request.user,
         )
+        logger.info(f"Project deleted successfully: {project.name}")
 
         return Response({
             "message": "Project deleted successfully"},
@@ -177,12 +190,15 @@ class ProjectAPI(viewsets.ModelViewSet):
     # --------------------------------------------------
     @action(detail=True, methods=["get"])
     def members(self, request):
-        project = get_project(request.query_params.get("project_id"))
+        project_id = request.query_params.get("project_id")
+        logger.info(f"Listing members for project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         members = self.apply_filters(request, get_all_project_memberships(project.id))
 
         page = self.pagination_class.paginate_queryset(members, request)
+        logger.debug(f"Found {len(page)} members for project: {project.name}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success", 
@@ -191,13 +207,16 @@ class ProjectAPI(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["delete"])
     def self_remove_member(self, request):
-        project = get_project(request.query_params.get("project_id"))
+        project_id = request.query_params.get("project_id")
+        logger.info(f"Self-remove from project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         self_remove_project_member(
             project=project,
             user=request.user,
         )
+        logger.info(f"User self-removed from project: {project.name}")
 
         return Response({
             "message": "Member removed successfully"},
@@ -206,7 +225,10 @@ class ProjectAPI(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def send_invite(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        email = request.data.get("email")
+        logger.info(f"Sending invite to {email} for project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         serializer_class = self.get_serializer_class()
@@ -218,6 +240,7 @@ class ProjectAPI(viewsets.ModelViewSet):
 
         user = get_user(serializer.validated_data["email"], kind="email")
         if not user:
+            logger.warning(f"User not found for invite: {email}")
             raise NotFound("User not found")
 
         invite_token = send_project_invite(
@@ -226,6 +249,7 @@ class ProjectAPI(viewsets.ModelViewSet):
             invited_by=request.user,
             role=request.data.get("role", "MEMBER"),
         )
+        logger.info(f"Invite sent successfully to {email} for project: {project.name}")
 
         return Response({
             "message": "Invite sent", 
@@ -235,7 +259,9 @@ class ProjectAPI(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def add_member(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        logger.info(f"Adding member to project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
         user_id = verify_invite_token(
@@ -243,6 +269,7 @@ class ProjectAPI(viewsets.ModelViewSet):
             token=request.data.get("invite_token"),
         )
         if not user_id:
+            logger.warning(f"Invalid invite token for project: {project.name}")
             raise ValidationError("Invalid invite token")
 
         user = User.objects.get(id=user_id)
@@ -252,6 +279,7 @@ class ProjectAPI(viewsets.ModelViewSet):
             user=user,
             role=request.data.get("role", "MEMBER"),
         )
+        logger.info(f"Member {user.email} added to project: {project.name}")
 
         return Response({
             "message": "Member added successfully",
@@ -261,11 +289,15 @@ class ProjectAPI(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"])
     def update_member(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        email = request.data.get("email")
+        logger.info(f"Updating member {email} in project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
-        target_user = get_user(request.data.get("email"), kind="email")
+        target_user = get_user(email, kind="email")
         if not target_user:
+            logger.warning(f"User not found for update: {email}")
             raise NotFound("User not found")
 
         serializer_class = self.get_serializer_class()
@@ -284,6 +316,7 @@ class ProjectAPI(viewsets.ModelViewSet):
             user=target_user,
             role=serializer.validated_data["role"],
         )
+        logger.info(f"Member {email} updated in project: {project.name}")
 
         return Response({
             "message": "Project member updated successfully",
@@ -293,17 +326,22 @@ class ProjectAPI(viewsets.ModelViewSet):
         
     @action(detail=True, methods=["delete"])
     def remove_member(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        email = request.data.get("email")
+        logger.info(f"Removing member {email} from project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
-        user = get_user(request.data.get("email"), kind="email")
+        user = get_user(email, kind="email")
         if not user:
+            logger.warning(f"User not found for removal: {email}")
             raise NotFound("User not found")
 
         remove_project_member(
             project=project,
             user=user,
         )
+        logger.info(f"Member {email} removed from project: {project.name}")
 
         return Response({
             "message": "Member removed successfully"},
@@ -312,11 +350,15 @@ class ProjectAPI(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"])
     def transfer_ownership(self, request):
-        project = get_project(request.data.get("project_id"))
+        project_id = request.data.get("project_id")
+        email = request.data.get("email")
+        logger.info(f"Transferring ownership of project: {project_id} to {email} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
 
-        new_owner = get_user(request.data.get("email"), kind="email")
+        new_owner = get_user(email, kind="email")
         if not new_owner:
+            logger.warning(f"User not found for ownership transfer: {email}")
             raise NotFound("User not found")
 
         transfer_project_ownership(
@@ -324,6 +366,7 @@ class ProjectAPI(viewsets.ModelViewSet):
             new_owner=new_owner,
             performed_by=request.user,
         )
+        logger.info(f"Ownership transferred to {email} for project: {project.name}")
 
         return Response({
             "message": "Project owner updated successfully"},

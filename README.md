@@ -20,6 +20,8 @@ A Django REST Framework application for task management with organizations, team
 - ⚡ Redis caching
 - 🔐 Comprehensive permission system
 - 📡 RESTful API with Django REST Framework
+- 📊 Complete activity tracking and audit trails
+- 🔍 Advanced logging throughout the application
 
 ## Quick Start
 
@@ -40,6 +42,8 @@ See [docs/SETUP.md](docs/SETUP.md) for detailed installation instructions.
 - 🔌 **[API Reference](docs/API_REFERENCE.md)** - API endpoints and usage
 - 👨‍💻 **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Development practices
 - 🌳 **[Git Workflow](docs/GIT_WORKFLOW.md)** - Branching and contribution process
+- 📊 **[Activity Tracking](docs/ACTIVITY_TRACKING.md)** - User activity logging and audit trails
+- 📋 **[Activity Tracking Setup](docs/ACTIVITY_TRACKING_SETUP.md)** - Quick setup guide for activity tracking
 - 🤝 **[Contributing](CONTRIBUTING.md)** - How to contribute
 
 ## Project Structure
