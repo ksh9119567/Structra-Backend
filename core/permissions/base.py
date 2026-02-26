@@ -1,5 +1,6 @@
-from django.core.exceptions import ObjectDoesNotExist
 import logging
+
+from django.core.exceptions import ObjectDoesNotExist
 
 from app.organizations.models import OrganizationMembership
 from app.teams.models import TeamMembership
@@ -22,7 +23,6 @@ def _get_role_from_membership(ModelClass, **filters):
         logger.debug(f"Membership not found for {ModelClass.__name__}")
         return None
 
-
 def get_org_role(user, organization):
     """
     Return role string or None.
@@ -40,7 +40,6 @@ def get_org_role(user, organization):
         logger.error(f"Error getting org role: {str(e)}")
         return None
 
-
 def get_team_role(user, team):
     if team is None:
         logger.debug("Team is None")
@@ -53,7 +52,6 @@ def get_team_role(user, team):
     except Exception as e:
         logger.error(f"Error getting team role: {str(e)}")
         return None
-
 
 def get_project_role(user, project):
     if user is None or not getattr(user, "is_authenticated", False):

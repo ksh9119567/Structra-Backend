@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -15,6 +17,36 @@ class UserSerializer(serializers.ModelSerializer):
                   "is_email_verified", "is_phone_verified", "is_active", "is_staff", "date_joined"]
         read_only_fields = ["id"]
 
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(source="phone_no", required=False, allow_blank=True)
+    
+    class Meta:
+        model = User
+        fields = ["username", "first_name", "last_name", "profile_picture", "phone_number"]
+        
+    def validate_phone_number(self, value):
+        user = self.instance
+        phone = re.sub(r'[\s\-\(\)]', '', value)
+        if not re.match(r'^\+?1?\d{9,15}$', phone):
+            raise serializers.ValidationError("Enter a valid phone number.")
+        
+        if value and User.objects.filter(phone_no=value).exclude(id=user.id).exists():
+            raise serializers.ValidationError("Phone number is already in use.")
+        
+        return value
+    
+    def update(self, instance, validated_data):
+        phone_no = validated_data.pop("phone_no", None)
+        if phone_no is not None:
+            instance.phone_no = phone_no
+            instance.is_phone_verified = False  # Mark as unverified if phone number changes
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)

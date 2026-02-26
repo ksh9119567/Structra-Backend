@@ -4,20 +4,23 @@ Base URL: `/api/v1/`
 
 ---
 
-## 🔐 Authentication
+## 🔐 Authentication Endpoints
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
 | POST | `/accounts/register/` | Register new user |
-| GET  | `/accounts/get-user/` | Get current user details |
-| POST | `/accounts/login/` | Login (JWT) |
+| POST | `/accounts/login/` | Login with email and password |
 | POST | `/accounts/logout/` | Logout and blacklist token |
 | POST | `/accounts/token/refresh/` | Refresh access token |
-| POST | `/accounts/otp/get/` | Generate & Send OTP on email or phone |
-| POST | `/accounts/otp/verify/` | Verify OTP |
-| POST | `/accounts/forgot-password/request/` | Generate & Send OTP for password reset |
-| POST | `/accounts/forgot-password/verify/` | Verify OTP and generate reset token |
-| PUT  | `/accounts/forgot-password/reset/` | Reset password with token |
+| GET  | `/accounts/get-user/` | Get current user details |
+| PUT  | `/accounts/update_user/` | Update user profile |
+| DELETE | `/accounts/delete_user/` | Delete user account |
+| POST | `/accounts/get-otp/` | Generate & Send OTP for email/phone verification |
+| POST | `/accounts/verify-otp/` | Verify OTP for email/phone |
+| POST | `/accounts/verify-otp/login/` | Login using OTP |
+| POST | `/accounts/forgot-password/request/` | Request password reset (sends OTP) |
+| POST | `/accounts/forgot-password/verify/` | Verify OTP for password reset |
+| PUT  | `/accounts/forgot-password/reset/` | Reset password with verification token |
 
 **Register Request Body:**
 ```json
@@ -42,29 +45,36 @@ Base URL: `/api/v1/`
     "is_phone_verified": false,
     "date_joined": "2024-01-15T10:30:00Z"
   },
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  "refresh": "<refresh_token>",
+  "access": "<access_token>"
 }
 ```
 
+**Authentication Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Note**: All endpoints except register, login, and password reset require JWT authentication via Authorization header.
+
 ---
 
-## 🧑‍💼 Organizations
+## 🏢 Organizations
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
-| GET  | `/organizations/` | List all organizations user is member of |
-| POST | `/organizations/` | Create a new organization |
-| GET  | `/organizations/{id}/` | Get organization details |
-| PATCH | `/organizations/{id}/` | Update organization details |
-| DELETE | `/organizations/{id}/` | Delete organization (owner only) |
-| GET  | `/organizations/{id}/members/` | List all organization members |
-| POST | `/organizations/{id}/send_invite/` | Send invite to user for organization |
-| POST | `/organizations/{id}/add_member/` | Add user to organization (via invite token) |
-| PATCH | `/organizations/{id}/update_member/` | Update member role in organization |
-| DELETE | `/organizations/{id}/remove_member/` | Remove member from organization |
-| DELETE | `/organizations/{id}/self_remove_member/` | Remove yourself from organization |
-| PATCH | `/organizations/{id}/transfer_owner/` | Transfer organization ownership |
+| GET  | `/organizations/get-org/` | List all organizations user is member of |
+| POST | `/organizations/create-org/` | Create a new organization |
+| GET  | `/organizations/get-org-details/` | Get organization details |
+| PUT  | `/organizations/update-org/` | Update organization details |
+| DELETE | `/organizations/delete-org/` | Delete organization (owner only) |
+| GET  | `/organizations/get-org-members/` | List all organization members |
+| POST | `/organizations/sent-invite/` | Send invite to user for organization |
+| POST | `/organizations/accept-org-invite/` | Accept organization invite |
+| PUT  | `/organizations/update-member/` | Update member role in organization |
+| DELETE | `/organizations/remove-member/` | Remove member from organization |
+| DELETE | `/organizations/self-remove-member/` | Remove yourself from organization |
+| PUT  | `/organizations/update-owner/` | Transfer organization ownership |
 
 **Query Parameters:**
 - `org_id` - Organization ID (required for most operations)
@@ -76,8 +86,7 @@ Base URL: `/api/v1/`
 **Create Organization Request Body:**
 ```json
 {
-  "name": "Acme Corporation",
-  "is_self_remove_allowed": false
+  "name": "Acme Corporation"
 }
 ```
 
@@ -89,7 +98,10 @@ Base URL: `/api/v1/`
     "id": "org-uuid",
     "name": "Acme Corporation",
     "owner": "user-uuid",
-    "is_self_remove_allowed": false,
+    "member_count": 1,
+    "team_count": 0,
+    "project_count": 0,
+    "owner_email": "owner@example.com",
     "created_at": "2024-01-15T10:30:00Z",
     "updated_at": "2024-01-15T10:30:00Z"
   }
@@ -105,27 +117,29 @@ Base URL: `/api/v1/`
 
 ---
 
-## 🧑‍💼 Teams
+## � Teams
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
-| GET  | `/teams/` | List all teams user is member of |
-| POST | `/teams/` | Create a new team |
-| GET  | `/teams/{id}/` | Get team details |
-| PATCH | `/teams/{id}/` | Update team details |
-| DELETE | `/teams/{id}/` | Delete team (creator only) |
-| GET  | `/teams/{id}/members/` | List all team members |
-| POST | `/teams/{id}/send_invite/` | Send invite to user for team |
-| POST | `/teams/{id}/add_member/` | Add user to team (via invite token) |
-| PATCH | `/teams/{id}/update_member/` | Update member role in team |
-| DELETE | `/teams/{id}/remove_member/` | Remove member from team |
-| DELETE | `/teams/{id}/self_remove_member/` | Remove yourself from team |
-| PATCH | `/teams/{id}/transfer_manager/` | Transfer team manager role |
+| GET  | `/teams/get-user-teams/` | List all teams user is member of |
+| POST | `/teams/create-team/` | Create a new team |
+| GET  | `/teams/get-team-details/` | Get team details |
+| PUT  | `/teams/update-team/` | Update team details |
+| DELETE | `/teams/delete-team/` | Delete team (creator only) |
+| GET  | `/teams/get-org-teams/` | List all teams in an organization |
+| GET  | `/teams/get-team-members/` | List all team members |
+| POST | `/teams/sent-invite/` | Send invite to user for team |
+| POST | `/teams/accept-team-invite/` | Accept team invite |
+| PUT  | `/teams/update-member/` | Update member role in team |
+| DELETE | `/teams/remove-member/` | Remove member from team |
+| DELETE | `/teams/self-remove-member/` | Remove yourself from team |
+| PUT  | `/teams/transfer-owner/` | Transfer team ownership |
 
 **Query Parameters:**
 - `team_id` - Team ID (required for most operations)
+- `org_id` - Organization ID (for org_teams endpoint)
 - `email` - User email (for member operations)
-- `role` - Role to assign (MANAGER, LEAD, MEMBER, VIEWER)
+- `role` - Role to assign (OWNER, MANAGER, LEAD, MEMBER, VIEWER)
 - `search` - Search by name or description
 - `ordering` - Order by field (-created_at)
 
@@ -134,8 +148,7 @@ Base URL: `/api/v1/`
 {
   "name": "Development Team",
   "description": "Backend development team",
-  "organization": "org-uuid",
-  "is_self_remove_allowed": false
+  "organization_id": "org-uuid"
 }
 ```
 
@@ -149,7 +162,6 @@ Base URL: `/api/v1/`
     "description": "Backend development team",
     "organization": "org-uuid",
     "created_by": "user-uuid",
-    "is_self_remove_allowed": false,
     "created_at": "2024-01-15T10:30:00Z",
     "updated_at": "2024-01-15T10:30:00Z"
   }
@@ -157,42 +169,49 @@ Base URL: `/api/v1/`
 ```
 
 **Team Roles:**
-- `MANAGER` - Manages team, invites members
-- `LEAD` - Can assign tasks, manage team workflows
+- `OWNER` - Manages team, invites members
+- `MANAGER` - Can manage team workflows
+- `LEAD` - Can assign tasks, manage workflows
 - `MEMBER` - Normal team member
 - `VIEWER` - Read-only access
 
 ---
 
-## 🧑‍💼 Projects
+## 📊 Projects
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
-| GET  | `/projects/` | List all projects user is member of (paginated) |
-| POST | `/projects/` | Create a new project |
-| GET  | `/projects/{id}/` | Get project details |
-| PATCH | `/projects/{id}/` | Update project details |
-| DELETE | `/projects/{id}/` | Delete project (owner only) |
-| GET  | `/projects/{id}/members/` | List all project members |
-| POST | `/projects/{id}/send_invite/` | Send invite to user for project |
-| POST | `/projects/{id}/add_member/` | Add user to project (via invite token) |
-| PATCH | `/projects/{id}/update_member/` | Update member role in project |
-| DELETE | `/projects/{id}/remove_member/` | Remove member from project |
-| DELETE | `/projects/{id}/self_remove_member/` | Remove yourself from project |
-| PATCH | `/projects/{id}/transfer_ownership/` | Transfer project ownership |
+| GET  | `/projects/get-user-projects/` | List all projects user is member of (paginated) |
+| POST | `/projects/create-project/` | Create a new project |
+| GET  | `/projects/get-project-details/` | Get project details |
+| PUT  | `/projects/update-project/` | Update project details |
+| DELETE | `/projects/delete-project/` | Delete project (owner only) |
+| GET  | `/projects/get_org-projects/` | List all projects in an organization |
+| GET  | `/projects/get-team-projects/` | List all projects in a team |
+| GET  | `/projects/get-project-members/` | List all project members |
+| POST | `/projects/send-invite/` | Send invite to user for project |
+| POST | `/projects/accept-project-invite/` | Accept project invite |
+| PUT  | `/projects/update-member/` | Update member role in project |
+| DELETE | `/projects/remove-member/` | Remove member from project |
+| DELETE | `/projects/self-remove-member/` | Remove yourself from project |
+| PUT  | `/projects/transfer-owner/` | Transfer project ownership |
 
 **Query Parameters:**
 - `project_id` - Project ID (required for most operations)
+- `org_id` - Organization ID (for org_projects endpoint)
+- `team_id` - Team ID (for team_projects endpoint)
 - `email` - User email (for member operations)
-- `role` - Role to assign (OWNER, MANAGER, CONTRIBUTOR, VIEWER)
+- `role` - Role to assign (OWNER, MANAGER, LEAD, CONTRIBUTOR, VIEWER)
+- `search` - Search by name or description
+- `ordering` - Order by field (-created_at)
 
 **Create Project Request Body:**
 ```json
 {
   "name": "My Project",
   "description": "Project description",
-  "organization": "org-uuid",
-  "team": "team-uuid",
+  "organization_id": "org-uuid",
+  "team_id": "team-uuid",
   "status": "PLANNING"
 }
 ```
@@ -209,7 +228,6 @@ Base URL: `/api/v1/`
     "team": "team-uuid",
     "created_by": "user-uuid",
     "status": "PLANNING",
-    "is_self_remove_allowed": false,
     "created_at": "2024-01-15T10:30:00Z",
     "updated_at": "2024-01-15T10:30:00Z"
   }
@@ -219,6 +237,7 @@ Base URL: `/api/v1/`
 **Project Roles:**
 - `OWNER` - Full control of project
 - `MANAGER` - Can manage tasks and members
+- `LEAD` - Can assign tasks and manage workflows
 - `CONTRIBUTOR` - Can work on tasks
 - `VIEWER` - Can view everything
 
@@ -235,25 +254,25 @@ Base URL: `/api/v1/`
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
-| GET  | `/tasks/` | List all tasks in a project (paginated) |
-| POST | `/tasks/` | Create a new task |
-| GET  | `/tasks/{id}/` | Get task details |
-| PATCH | `/tasks/{id}/` | Update task details |
-| DELETE | `/tasks/{id}/` | Delete task (creator/manager only) |
+| GET  | `/tasks/get-project-tasks/` | List all tasks in a project (paginated) |
+| POST | `/tasks/create-task/` | Create a new task |
+| GET  | `/tasks/get_task_details/` | Get task details |
+| PUT  | `/tasks/update-task/` | Update task details |
+| DELETE | `/tasks/delete-task/` | Delete task (creator/manager only) |
 
 **Query Parameters:**
 - `project_id` - Project ID (required)
 - `status` - Filter by status (TO_DO, IN_PROGRESS, REVIEW, DONE, BLOCKED)
 - `priority` - Filter by priority (LOW, MEDIUM, HIGH, URGENT)
 - `assigned_to` - Filter by assignee UUID
-- `parent` - Filter by parent task UUID (for subtasks)
+- `parent_id` - Filter by parent task UUID (for subtasks)
 - `search` - Search in title and description
-- `ordering` - Order by field (-timestamp, due_date, priority)
+- `ordering` - Order by field (-created_at, due_date, priority)
 
 **Create Task Request Body:**
 ```json
 {
-  "project": "project-uuid",
+  "project_id": "project-uuid",
   "title": "Task Title",
   "description": "Task description",
   "start_date": "2024-01-15",
@@ -262,27 +281,30 @@ Base URL: `/api/v1/`
   "priority": "HIGH",
   "task_type": "FEATURE",
   "assigned_to": "user-uuid",
-  "parent": null
+  "parent_id": null
 }
 ```
 
-**Create Task Response:**
+**Create Task Response (201):**
 ```json
 {
-  "id": "task-uuid",
-  "project": "project-uuid",
-  "parent": null,
-  "title": "Task Title",
-  "description": "Task description",
-  "start_date": "2024-01-15",
-  "due_date": "2024-01-20",
-  "status": "TO_DO",
-  "priority": "HIGH",
-  "task_type": "FEATURE",
-  "assigned_to": "user-uuid",
-  "created_by": "user-uuid",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-15T10:30:00Z"
+  "message": "Task created successfully",
+  "data": {
+    "id": "task-uuid",
+    "project": "project-uuid",
+    "parent": null,
+    "title": "Task Title",
+    "description": "Task description",
+    "start_date": "2024-01-15",
+    "due_date": "2024-01-20",
+    "status": "TO_DO",
+    "priority": "HIGH",
+    "task_type": "FEATURE",
+    "assigned_to": "user-uuid",
+    "created_by": "user-uuid",
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-15T10:30:00Z"
+  }
 }
 ```
 
@@ -307,7 +329,85 @@ Base URL: `/api/v1/`
 
 ---
 
-## � Activity Logs
+## ⚙️ Governance Settings
+
+| Method | Endpoint | Description |
+|---------|-----------|-------------|
+| GET  | `/governance/get-org-settings/` | Get organization settings |
+| GET  | `/governance/get-team-settings/` | Get team settings |
+| GET  | `/governance/get-project-settings/` | Get project settings |
+| PUT  | `/governance/update-org-settings/` | Update organization settings |
+| PUT  | `/governance/update-team-settings/` | Update team settings |
+| PUT  | `/governance/update-project-settings/` | Update project settings |
+
+**Query Parameters:**
+- `org_id` - Organization ID (for org settings)
+- `team_id` - Team ID (for team settings)
+- `project_id` - Project ID (for project settings)
+
+**Organization Settings Response:**
+```json
+{
+  "id": "settings-uuid",
+  "organization": "org-uuid",
+  "allow_team_creation": true,
+  "allow_project_creation": true,
+  "allow_member_invites": true,
+  "allow_member_updates": true,
+  "allow_member_removal": true,
+  "allow_self_removal": true,
+  "create_team_min_role": "MANAGER",
+  "create_project_min_role": "MANAGER",
+  "invite_member_min_role": "ADMIN",
+  "update_member_min_role": "ADMIN",
+  "remove_member_min_role": "ADMIN",
+  "default_member_role": "MEMBER"
+}
+```
+
+**Team Settings Response:**
+```json
+{
+  "id": "settings-uuid",
+  "team": "team-uuid",
+  "allow_project_creation": true,
+  "allow_member_invites": true,
+  "allow_member_updates": true,
+  "allow_member_removal": true,
+  "allow_self_removal": true,
+  "create_project_min_role": "MANAGER",
+  "invite_member_min_role": "MANAGER",
+  "update_member_min_role": "MANAGER",
+  "remove_member_min_role": "MANAGER",
+  "default_member_role": "MEMBER"
+}
+```
+
+**Project Settings Response:**
+```json
+{
+  "id": "settings-uuid",
+  "project": "project-uuid",
+  "allow_task_creation": true,
+  "allow_task_updates": true,
+  "allow_task_deletions": true,
+  "allow_member_invites": true,
+  "allow_member_updates": true,
+  "allow_member_removal": true,
+  "allow_self_removal": true,
+  "create_task_min_role": "CONTRIBUTOR",
+  "update_task_min_role": "CONTRIBUTOR",
+  "delete_task_min_role": "MANAGER",
+  "invite_member_min_role": "MANAGER",
+  "update_member_min_role": "MANAGER",
+  "remove_member_min_role": "MANAGER",
+  "default_member_role": "CONTRIBUTOR"
+}
+```
+
+---
+
+## 📊 Activity Logs
 
 | Method | Endpoint | Description |
 |---------|-----------|-------------|
@@ -318,7 +418,7 @@ Base URL: `/api/v1/`
 
 **Query Parameters:**
 - `action` - Filter by action (CREATE, READ, UPDATE, DELETE, LOGIN, LOGOUT, ACCESS, FAILED)
-- `resource_type` - Filter by resource type (Organization, Project, Team, Task, etc.)
+- `resource_type` - Filter by resource type (Organization, Project, Team, Task, User, etc.)
 - `method` - Filter by HTTP method (GET, POST, PUT, PATCH, DELETE)
 - `status_code` - Filter by HTTP status code
 - `status_code_gte` - Filter by status code >= value
@@ -328,8 +428,9 @@ Base URL: `/api/v1/`
 - `username` - Search by username (admin only)
 - `search` - Full-text search
 - `ordering` - Order by field (-timestamp, response_time_ms, status_code)
+- `page` - Page number for pagination
 
-**Response Example (List):**
+**Activity Log Response Example (List):**
 ```json
 {
   "count": 150,
@@ -345,7 +446,7 @@ Base URL: `/api/v1/`
       "resource_name": "My Project",
       "description": "CREATE Project: My Project",
       "method": "POST",
-      "path": "/api/v1/projects/",
+      "path": "/api/v1/projects/create-project/",
       "status_code": 201,
       "response_time_ms": 145.23,
       "timestamp": "2024-01-15T10:30:00Z"
@@ -354,7 +455,7 @@ Base URL: `/api/v1/`
 }
 ```
 
-**Response Example (Stats):**
+**Activity Log Response Example (Stats):**
 ```json
 {
   "message": "Success",
@@ -385,19 +486,15 @@ Base URL: `/api/v1/`
 
 ---
 
-## 💬 Comments
+## 🧠 Important Notes
 
-| Method | Endpoint | Description |
-|---------|-----------|-------------|
-
-
----
-
-
-## 🧠 Notes
-- All endpoints require JWT token (except register/login).
-- Admin users have elevated access across org/projects.
-- Pagination and filtering supported via DRF defaults.
-- Activity logs are automatically tracked for all API requests.
-- Sensitive data (passwords, tokens) is automatically redacted from logs.
-- See [Activity Tracking Documentation](ACTIVITY_TRACKING.md) for detailed activity log information.
+- All endpoints require JWT token authentication (except register, login, and password reset)
+- Admin users have elevated access across organizations and projects
+- Pagination and filtering supported via DRF defaults
+- Activity logs are automatically tracked for all API requests
+- Sensitive data (passwords, tokens) is automatically redacted from logs
+- Soft delete is implemented for Users, Organizations, Teams, Projects, and Tasks
+- Deleted entities are never returned in API responses
+- All list endpoints automatically filter out deleted entities using `is_deleted=False`
+- See [Activity Tracking Documentation](ACTIVITY_TRACKING.md) for detailed activity log information
+- See [Authentication Flow](AUTHENTICATION_FLOW.md) for detailed authentication and authorization flow

@@ -8,8 +8,11 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from core.models import ActivityLog
 from core.api.serializers import ActivityLogSerializer, ActivityLogListSerializer
-from core.api.filters import ActivityLogFilter
+from core.filters import ActivityLogFilter
 from core.pagination import StandardPagination
+from core.utils.base_utils import add_member
+
+from services.invite_token_service import verify_invite_token
 
 logger = logging.getLogger(__name__)
 

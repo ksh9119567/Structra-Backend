@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from core.constants import PROJECT_ROLE_HIERARCHY
+from core.constants.project_constant import PROJECT_ROLE_HIERARCHY
 from core.permissions.base import get_project_role
 from core.permissions.mixins import RoleCheckerMixin
 

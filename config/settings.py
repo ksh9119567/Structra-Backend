@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'app.comments',
     'app.sprints',
     'app.organizations',
+    'app.governance.apps.GovernanceConfig',
 ]
 
 MIDDLEWARE = [
@@ -202,7 +203,7 @@ AUTH_USER_MODEL = 'accounts.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'app.accounts.services.authentication.ValidatedJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -214,6 +215,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ),
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 SIMPLE_JWT = {

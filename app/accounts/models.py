@@ -60,6 +60,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_email_verified = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False) # Soft delete flag
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
 

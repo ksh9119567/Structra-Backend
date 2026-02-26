@@ -5,27 +5,27 @@ from rest_framework.views import APIView
 from rest_framework.generics import CreateAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
-from app.accounts.models import User
-from core.utils import get_user
-
 from app.accounts.api.v1.serializers import (
-    RegisterSerializer, UserSerializer, CustomTokenObtainPairSerializer, GetOTPSerializer, 
-    VerifyOTPSerializer, ForgotPasswordRequestSerializer, ForgotPasswordVerifySerializer, 
-    ForgotPasswordResetSerializer,
+    RegisterSerializer, UserSerializer, UserUpdateSerializer, CustomTokenObtainPairSerializer, 
+    GetOTPSerializer, VerifyOTPSerializer, ForgotPasswordRequestSerializer, 
+    ForgotPasswordVerifySerializer, ForgotPasswordResetSerializer, 
 )
-
-from services.token_service import (
-    is_refresh_token_valid, store_refresh_token, delete_refresh_token,
-)
-
+from app.accounts.services.user_service import delete_user_account
 from app.accounts.services.auth_service import login_user, logout_user
 from app.accounts.services.otp_flow_service import send_otp, verify_otp_flow
 from app.accounts.services.password_reset_service import (
     request_password_reset, verify_password_reset_otp, reset_password,
 )
+
+from services.token_service import (
+    is_refresh_token_valid, store_refresh_token, delete_refresh_token, store_access_token
+)
+
+from core.utils.base_utils import get_user
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class RegisterAPI(CreateAPIView):
             status=status.HTTP_201_CREATED,
         )
 
+
 class LoginAPI(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
@@ -61,20 +62,21 @@ class LoginAPI(TokenObtainPairView):
         response = super().post(request)
         if response.status_code == status.HTTP_200_OK:
             refresh_token = response.data.get('refresh')
+            access_token = response.data.get('access')
             if refresh_token:
                 try:
                     token_obj = RefreshToken(refresh_token)
                     uid = token_obj.get('user_id') or token_obj.get('user')
                     if uid:
                         store_refresh_token(uid, refresh_token)
+                        if access_token:
+                            store_access_token(uid, access_token)
                         logger.info(f"User logged in successfully, user_id: {uid}")
                 except TokenError as e:
                     logger.error(f"Token error during login: {str(e)}")
                     pass
         return response
                 
-    
-
 
 class RefreshAPI(TokenRefreshView):
     def post(self, request):
@@ -89,10 +91,14 @@ class RefreshAPI(TokenRefreshView):
 
         response = super().post(request)
         new_refresh = response.data.get("refresh")
+        new_access = response.data.get("access")
 
         if new_refresh:
             token = RefreshToken(new_refresh)
-            store_refresh_token(token["user_id"], new_refresh)
+            uid = token["user_id"]
+            store_refresh_token(uid, new_refresh)
+            if new_access:
+                store_access_token(uid, new_access)
             delete_refresh_token(old_refresh)
             logger.info("Token refreshed successfully")
 
@@ -106,10 +112,15 @@ class LogoutAPI(APIView):
         logger.info(f"Logout attempt for user: {request.user.email}")
         logout_user(
             refresh_token=request.data.get("refresh"),
+            access_token=request.data.get("access"),
             request_user=request.user,
         )
         logger.info(f"User logged out successfully: {request.user.email}")
         return Response({"message": "Logged out"}, status=205)
+
+# ---------------------------------------
+# USER: Get Profile / Update Profile / Delete Profile
+# ---------------------------------------
 
 class GetUserAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -117,6 +128,42 @@ class GetUserAPI(APIView):
     def get(self, request):
         logger.debug(f"Get user info request for: {request.user.email}")
         return Response({"message": "Success", "data": UserSerializer(request.user).data}, status=status.HTTP_200_OK)
+    
+    def put(self, request):
+        logger.info(f"Update user profile attempt for user: {request.user.email}")
+        serializer = UserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context = {"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        logger.info(f"User profile updated successfully for user:")
+        
+        return Response({
+            "message": "User updated successfully",
+            "data": UserSerializer(request.user).data},
+            status=status.HTTP_200_OK
+        )
+    
+    def delete(self, request):
+        try:
+            logger.info(f"Delete user account attempt for user: {request.user.email}")
+            delete_user_account(request.user)
+            logger.info(f"User account deleted successfully for user: {request.user.email}")
+            
+            return Response({
+                "message": "User account deleted"}, 
+                status=status.HTTP_204_NO_CONTENT
+            )
+        
+        except ValidationError as e:
+            logger.warning(f"Validation error during account deletion for user: {request.user.email} - {str(e)}")
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f"Error deleting user account for user: {request.user.email}, error: {str(e)}")
     
 # ---------------------------------------
 # OTP: Email / Phone Verification & Login
@@ -136,6 +183,7 @@ class GetOTPAPI(APIView):
             purpose=serializer.validated_data["purpose"],
         )
         return Response({"message": "OTP sent"})
+
 
 class VerifyOTPAPI(APIView):
     permission_classes = [permissions.AllowAny]
@@ -165,6 +213,7 @@ class VerifyOTPAPI(APIView):
         logger.info(f"OTP verified successfully for user: {user.email}")
         
         return Response({"message": "Verified"}, status=status.HTTP_200_OK)
+
 
 class OTPLoginAPI(APIView):
     permission_classes = [permissions.AllowAny]
@@ -214,6 +263,7 @@ class ForgotPasswordRequestAPI(APIView):
         )
         return Response({"message": "OTP sent"})
 
+
 class ForgotPasswordVerifyAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -224,6 +274,7 @@ class ForgotPasswordVerifyAPI(APIView):
 
         reset_token = verify_password_reset_otp(**serializer.validated_data)
         return Response({"message": reset_token})
+
 
 class ForgotPasswordResetAPI(APIView):
     permission_classes = [permissions.AllowAny]

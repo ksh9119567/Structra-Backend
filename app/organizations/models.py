@@ -3,9 +3,10 @@ import uuid
 from django.db import models
 from django.utils import timezone
 
-from core.constants import ORG_ROLES
-from core.models import TimeStampedModel
+from app.governance.models import OrganizationSettings
 
+from core.constants.org_constant import ORG_ROLES
+from core.models import TimeStampedModel
 
 class Organization(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -23,7 +24,10 @@ class Organization(TimeStampedModel):
         related_name="organizations"
     )
 
-    is_self_remove_allowed = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)  # Soft delete flag
+    
+    class Meta:
+        ordering = ("name",)
     
     def __str__(self):
         return self.name
@@ -40,7 +44,7 @@ class OrganizationMembership(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="memberships"
     )
-    role = models.CharField(max_length=50, choices=ORG_ROLES)
+    role = models.CharField(max_length=50, choices=ORG_ROLES, null=False, blank=False)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -52,6 +56,12 @@ class OrganizationMembership(TimeStampedModel):
             models.Index(fields=["user"]),
             models.Index(fields=["organization"]),
         ]
+        
+    def save(self, *args, **kwargs):
+        if not self.role:
+            org_settings = OrganizationSettings.objects.get(organization=self.organization)
+            self.role = org_settings.default_member_role
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.user.email} - {self.organization.name}"

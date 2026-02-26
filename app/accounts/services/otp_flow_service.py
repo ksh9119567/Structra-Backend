@@ -9,7 +9,6 @@ from services.otp_service import (
     increment_attempts,
 )
 from services.notification_services import send_sms_otp, send_email_otp_async
-from core.utils import get_user
 
 logger = logging.getLogger(__name__)
 

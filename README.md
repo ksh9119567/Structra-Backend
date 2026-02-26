@@ -40,6 +40,7 @@ See [docs/SETUP.md](docs/SETUP.md) for detailed installation instructions.
 
 - 📖 **[Setup Guide](docs/SETUP.md)** - Complete installation for Docker and local setup
 - 🔌 **[API Reference](docs/API_REFERENCE.md)** - API endpoints and usage
+- 🔐 **[Authentication Flow](docs/AUTHENTICATION_FLOW.md)** - Complete authentication and authorization flow
 - 👨‍💻 **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Development practices
 - 🌳 **[Git Workflow](docs/GIT_WORKFLOW.md)** - Branching and contribution process
 - 📊 **[Activity Tracking](docs/ACTIVITY_TRACKING.md)** - User activity logging and audit trails

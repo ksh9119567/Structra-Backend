@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from app.organizations.models import Organization, OrganizationMembership
-from core.constants import ORG_ROLE_HIERARCHY
+from core.constants.org_constant import ORG_ROLE_HIERARCHY
 from core.permissions.base import get_org_role
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -32,7 +32,7 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
         fields = ["name"]
 
     def validate_name(self, value):
-        if Organization.objects.filter(name__iexact=value).exists():
+        if Organization.objects.filter(name__iexact=value, is_deleted=False).exists():
             raise serializers.ValidationError("Organization with this name already exists.")
         return value
 
@@ -51,7 +51,7 @@ class OrganizationUpdateSerializer(serializers.ModelSerializer):
     def validate_name(self, value):
         # Allow same name if org not changing
         instance = self.instance
-        if Organization.objects.filter(name__iexact=value).exclude(id=instance.id).exists():
+        if Organization.objects.filter(name__iexact=value, is_deleted=False).exclude(id=instance.id).exists():
             raise serializers.ValidationError("Org with this name already exists.")
         return value
 
@@ -86,6 +86,12 @@ class OrganizationMemberUpdateSerializer(serializers.Serializer):
         if ORG_ROLE_HIERARCHY[new_role] >= ORG_ROLE_HIERARCHY[acting_role]:
             raise serializers.ValidationError("You cannot assign a role equal or higher than your own.")
 
+        # Prevent downgrading the last Admin
+        if target_role == "ADMIN" and new_role != "ADMIN":
+            manager_count = organization.memberships.filter(role="ADMIN").count()
+            if manager_count == 1:
+                raise serializers.ValidationError("Cannot change the role of last remaining Admin.")
+            
         return attrs
 
 

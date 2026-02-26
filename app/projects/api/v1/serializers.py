@@ -4,8 +4,12 @@ from app.projects.models import Project, ProjectMembership
 
 from app.organizations.models import Organization
 from app.teams.models import Team
+
 from core.permissions.base import get_org_role, get_team_role, get_project_role
-from core.constants import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
+from core.utils.project_utils import get_project
+from core.constants.project_constant import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
+from core.constants.org_constant import ORG_ROLE_HIERARCHY
+from core.constants.team_constant import TEAM_ROLE_HIERARCHY
 
 class ProjectSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
@@ -40,23 +44,43 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         if org_id:
             try:
                 org = Organization.objects.get(id=org_id)
+                if org.settings.max_projects == org.projects.count():
+                    raise serializers.ValidationError("Organization has reached maximum project limit.")
+                
             except Organization.DoesNotExist:
                 raise serializers.ValidationError("Organization not found.")
             
             role = get_org_role(request.user, org)
-            if role not in ["OWNER", "ADMIN"]:
+            min_role = org.settings.create_project_min_role
+            if ORG_ROLE_HIERARCHY[role] < ORG_ROLE_HIERARCHY[min_role]:
                 raise serializers.ValidationError("You do not have permission to create a project in this organization.")
             
             attrs["organization"] = org
+            
+            if team_id:
+                try:
+                    team = Team.objects.get(id=team_id)
+                    if team.organization != org:
+                        raise serializers.ValidationError("Team and Project does not belong to same organization.")
+                    
+                except Team.DoesNotExist:
+                    raise serializers.ValidationError("Team not found.")
         
-        if team_id:
+                attrs["team"] = team
+        
+        elif team_id:
             try:
                 team = Team.objects.get(id=team_id)
+                if team.settings.max_projects == team.projects.count():
+                    raise serializers.ValidationError("Team has reached maximum project limit.")
+                
             except Team.DoesNotExist:
                 raise serializers.ValidationError("Team not found.")
             
             role = get_team_role(request.user, team)
-            if role != "MANAGER":
+            min_role = team.settings.create_project_min_role
+            
+            if TEAM_ROLE_HIERARCHY[role] < TEAM_ROLE_HIERARCHY[min_role]:
                 raise serializers.ValidationError("You do not have permission to create a project in this team.")
             
             attrs["team"] = team
@@ -92,11 +116,27 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
         
         
 class ProjectUpdateSerializer(serializers.ModelSerializer):
-    
+    team_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     class Meta:
         model = Project
-        fields = ["name", "description", "status"]
+        fields = ["name", "description", "status", "team_id"]
         
+    def validate(self, attrs):
+        request = self.context["request"]
+        team_id = attrs.get("team_id", None)
+        project = self.instance
+        
+        if team_id:
+            try:
+                team = Team.objects.get(id=team_id)
+                if team.organization != project.organization:
+                    raise serializers.ValidationError("Team and Project does not belong to same organization.")
+            except Team.DoesNotExist:
+                raise serializers.ValidationError("Team not found.")
+    
+            attrs["team"] = team
+        
+        return attrs
         
 class InviteMemberSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -121,18 +161,21 @@ class ProjectMemberUpdateSerializer(serializers.Serializer):
 
         new_role = attrs.get("role")
         
-        # Only MANAGER or higher roles can modify
-        if PROJECT_ROLE_HIERARCHY[acting_role] < PROJECT_ROLE_HIERARCHY["MANAGER"]:
-            raise serializers.ValidationError("Only Project Manager can modify project members.")
+        min_role = project.settings.update_member_min_role
+        if PROJECT_ROLE_HIERARCHY[acting_role] < PROJECT_ROLE_HIERARCHY[min_role]:
+            raise serializers.ValidationError("You do not have permission to modify team members.")
 
         # Manager cannot change equal/higher roles
         if target_role and PROJECT_ROLE_HIERARCHY[target_role] >= PROJECT_ROLE_HIERARCHY[acting_role]:
             raise serializers.ValidationError("You cannot modify a member with equal or higher role.")
 
+        if PROJECT_ROLE_HIERARCHY[new_role] >= PROJECT_ROLE_HIERARCHY[acting_role]:
+            raise serializers.ValidationError("You cannot assign a role equal or higher than your own.")
+
         # Prevent downgrading the last manager
         if target_role == "MANAGER" and new_role != "MANAGER":
             manager_count = project.memberships.filter(role="MANAGER").count()
             if manager_count == 1:
-                raise serializers.ValidationError("Cannot remove the last manager.")
+                raise serializers.ValidationError("Cannot change the role of last remaining Manager.")
             
         return attrs
