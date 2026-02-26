@@ -3,6 +3,7 @@ import smtplib
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 from django.core.mail import send_mail
 from django.conf import settings
 
@@ -72,6 +73,7 @@ logger = logging.getLogger(__name__)
 # for asynchronous sending
 def send_email_otp_async(email: str, otp: str, subject: str = "Your verification code"):
     # call the celery task (non-blocking)
+    logger.info(f"Queuing OTP email for {email}")
     send_otp_email_task.delay(email, otp, subject)
 
 def send_sms_otp(phone_number: str, otp: str, ttl_minutes: int = 5):
@@ -91,5 +93,6 @@ def send_sms_otp(phone_number: str, otp: str, ttl_minutes: int = 5):
 
 def send_invite_email(email: str, invite_type: str, name: str, sender: str):
     # call the celery task (non-blocking)
+    logger.info(f"Queuing invite email for {email}, type: {invite_type}")
     send_invite_email_task.delay(email, invite_type, name, sender)
     

@@ -3,7 +3,9 @@ import uuid
 from django.db import models
 from django.utils import timezone
 
-from core.constants import TEAM_ROLES
+from app.governance.models import TeamSettings
+
+from core.constants.team_constant import TEAM_ROLES
 from core.models import TimeStampedModel
 
 
@@ -32,8 +34,11 @@ class Team(TimeStampedModel):
         through="TeamMembership",
         related_name="teams"
     )
-
-    is_self_remove_allowed = models.BooleanField(default=False)
+    
+    is_deleted = models.BooleanField(default=False)  # Soft delete flag
+    
+    class Meta:
+        ordering = ("name", )
     
     def __str__(self):
         return self.name
@@ -50,7 +55,7 @@ class TeamMembership(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="memberships"
     )
-    role = models.CharField(max_length=50, choices=TEAM_ROLES)
+    role = models.CharField(max_length=50, choices=TEAM_ROLES, null=False, blank=False)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -63,5 +68,11 @@ class TeamMembership(TimeStampedModel):
             models.Index(fields=["team"]),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.role:
+            team_settings = TeamSettings.objects.get(team=self.team)
+            self.role = team_settings.default_member_role
+        super().save(*args, **kwargs)
+        
     def __str__(self):
         return f"{self.user.email} - {self.team.name}"

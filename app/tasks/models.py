@@ -2,7 +2,7 @@ import uuid
 
 from django.db import models
 
-from core.constants import TASK_STATUS, TASK_PRIORITY, TASK_TYPE
+from core.constants.task_constant import TASK_STATUS, TASK_PRIORITY, TASK_TYPE
 from core.models import TimeStampedModel
 
 class Task(TimeStampedModel):
@@ -19,11 +19,12 @@ class Task(TimeStampedModel):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="subtasks"
+        related_name="subtasks",
+        limit_choices_to={"parent__isnull": True}
     )
     
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True, default="", max_length=2000)
+    description = models.TextField(blank=True, default="")
     start_date = models.DateField(blank=True, null=True, default=None)
     due_date = models.DateField(blank=True, null=True, default=None)
     status = models.CharField(max_length=50, choices=TASK_STATUS, default="TO_DO")
@@ -40,9 +41,11 @@ class Task(TimeStampedModel):
     
     created_by = models.ForeignKey(
         "accounts.User",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="created_tasks"
     )
+    
+    is_deleted = models.BooleanField(default=False)
     
     def __str__(self):
         return f"{self.title} - {self.project.name}"

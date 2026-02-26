@@ -6,7 +6,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from app.tasks.models import Task
@@ -16,18 +16,18 @@ from app.tasks.api.v1.serializers import (
 from app.tasks.services.task_service import delete_task
 from app.tasks.filters import TaskFilter
 
-from app.projects.models import Project
-
+from core.constants.project_constant import PROJECT_ROLE_HIERARCHY
 from core.pagination import StandardPagination
+from core.permissions.base import get_project_role
+from core.permissions.mixins import RoleCheckerMixin
 from core.permissions.project import IsProjectMember, IsProjectManager, IsProjectOwner
-from core.utils import (
-    get_project, get_task, get_all_task
-)
+from core.utils.task_utils import get_task, get_all_task
+from core.utils.project_utils import get_project
 
 logger = logging.getLogger(__name__)
 
 
-class TaskAPI(viewsets.ViewSet):
+class TaskAPI(viewsets.ViewSet, RoleCheckerMixin):
     """
     Task API (v1)
     """
@@ -41,11 +41,43 @@ class TaskAPI(viewsets.ViewSet):
         if self.action in ["list", "retrieve", "create", "update"]:
             permissions = [IsAuthenticated, IsProjectMember]
         elif self.action == "destroy":
-            permissions = [IsAuthenticated, IsProjectOwner, IsProjectManager]
+            permissions = [IsAuthenticated, IsProjectManager]
         else:
             permissions = [IsAuthenticated]
             
         return [permission() for permission in permissions]
+    
+    def check_role_permissions(self, request, project, task=None):
+        if self.action in ["create", "update", "destroy"] and task is not None:
+            if request.user == task.created_by or request.user == task.assigned_to:
+                return True
+            
+        role = get_project_role(request.user, project)
+        
+        if role == "OWNER":
+            return True
+        elif self.action == "create":
+            if project.settings.allow_task_creation == False:
+                raise PermissionDenied("You are not allowed to create tasks.")
+            
+            minimum_role = project.settings.create_task_min_role
+        elif self.action == "update":
+            if project.settings.allow_task_updates == False:
+                raise PermissionDenied("You are not allowed to update tasks.")
+            
+            minimum_role = project.settings.update_task_min_role
+        elif self.action == "destroy":
+            if project.settings.allow_task_deletions == False:
+                raise PermissionDenied("You are not allowed to delete tasks.")
+            
+            minimum_role = project.settings.delete_task_min_role
+        else:
+            return
+            
+        if not self.has_minimum_role(role, minimum_role, PROJECT_ROLE_HIERARCHY):
+            raise PermissionDenied(f"You must have at least {minimum_role} role to perform this action.")
+        else:
+            return True
     
     def get_serializer_class(self):
         if self.action == "create":
@@ -68,12 +100,15 @@ class TaskAPI(viewsets.ViewSet):
         return queryset
         
     def list(self, request):
-        project = get_project(request.query_params.get("project_id"))
+        project_id = request.query_params.get("project_id")
+        logger.info(f"Listing tasks for project: {project_id} by user: {request.user.email}")
+        project = get_project(project_id)
         self.check_object_permissions(request, project)
         
         tasks = self.apply_filters(request, get_all_task(project))
         
         page = self.pagination_class.paginate_queryset(tasks, request)
+        logger.debug(f"Found {len(page)} tasks for project: {project.name}")
         
         return self.pagination_class.get_paginated_response({
             "message": "Success",
@@ -81,7 +116,15 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def create(self, request):
-        self.check_object_permissions(request, serializer.validated_data["project"])
+        logger.info(f"Creating task by user: {request.user.email}, title: {request.data.get('title')}")
+        project = get_project(request.data.get("project_id"))
+        
+        task = None
+        if request.data.get("parent_id"):
+            task = get_task(request.data.get("parent_id"))
+        
+        self.check_object_permissions(request, project)
+        self.check_role_permissions(request, project, task)
         
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(
@@ -91,6 +134,7 @@ class TaskAPI(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         
         task = serializer.save()
+        logger.info(f"Task created successfully: {task.title} by {request.user.email}")
         
         return Response({
             "message": "Task created successfully",
@@ -99,8 +143,11 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def retrieve(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Retrieving task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
+        logger.debug(f"Task retrieved: {task.title}")
         
         return Response({
             "message": "Success",
@@ -109,8 +156,11 @@ class TaskAPI(viewsets.ViewSet):
         )
     
     def update(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Updating task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
+        self.check_role_permissions(request, task.project, task)
         
         serializer_class = TaskUpdateSerializer
         serializer = serializer_class(
@@ -121,6 +171,7 @@ class TaskAPI(viewsets.ViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        logger.info(f"Task updated successfully: {task.title}")
         
         return Response({
             "message": "Task updated successfully",
@@ -129,13 +180,17 @@ class TaskAPI(viewsets.ViewSet):
         )
         
     def destroy(self, request):
-        task = get_task(request.query_params.get("task_id"))
+        task_id = request.query_params.get("task_id")
+        logger.info(f"Deleting task: {task_id} by user: {request.user.email}")
+        task = get_task(task_id)
         self.check_object_permissions(request, task.project)
+        self.check_role_permissions(request, task.project, task)
         
         delete_task(
             task=task, 
             performed_by=request.user
         )
+        logger.info(f"Task deleted successfully: {task.title}")
         
         return Response(
             {"message": "Task deleted successfully"},

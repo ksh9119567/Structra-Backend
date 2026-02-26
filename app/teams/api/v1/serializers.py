@@ -5,7 +5,8 @@ from app.accounts.models import User
 from app.organizations.models import Organization, OrganizationMembership
 from app.organizations.models import Organization
 from core.permissions.base import get_org_role, get_team_role
-from core.constants import TEAM_ROLES, TEAM_ROLE_HIERARCHY
+from core.constants.team_constant import TEAM_ROLES, TEAM_ROLE_HIERARCHY
+from core.constants.org_constant import ORG_ROLE_HIERARCHY
 
 
 class TeamSerializer(serializers.ModelSerializer):
@@ -37,20 +38,24 @@ class TeamCreateSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         org_id = attrs.get("organization_id", None)
         
-        if not org_id:
-            return attrs
+        if org_id:
+            try:
+                org = Organization.objects.get(id=org_id)
+                if org.settings.max_teams == org.teams.count():
+                    raise serializers.ValidationError("Organization has reached maximum team limit.")
+                
+            except Organization.DoesNotExist:
+                raise serializers.ValidationError("Organization not found.")
 
-        try:
-            org = Organization.objects.get(id=org_id)
-        except Organization.DoesNotExist:
-            raise serializers.ValidationError("Organization not found.")
+            # Check Org permission (Admin or Owner)
+            role = get_org_role(request.user, org)
+            min_role = org.settings.create_team_min_role
+            
+            if ORG_ROLE_HIERARCHY[role] < ORG_ROLE_HIERARCHY[min_role]:
+                raise serializers.ValidationError("You do not have permission to create a team.")
 
-        # Check Org permission (Admin or Owner)
-        role = get_org_role(request.user, org)
-        if role not in ["OWNER", "ADMIN"]:
-            raise serializers.ValidationError("You do not have permission to create a team.")
-
-        attrs["organization"] = org
+            attrs["organization"] = org
+            
         return attrs
 
     def create(self, validated_data):
@@ -63,7 +68,7 @@ class TeamCreateSerializer(serializers.ModelSerializer):
             team.organization = org
             team.save()
 
-        TeamMembership.objects.create(user=request.user, team=team, role="MANAGER")
+        TeamMembership.objects.create(user=request.user, team=team, role="OWNER")
         return team
 
 
@@ -105,18 +110,22 @@ class TeamMemberUpdateSerializer(serializers.Serializer):
 
         new_role = attrs.get("role")
         
-        # Only MANAGER or higher roles can modify
-        if TEAM_ROLE_HIERARCHY[acting_role] < TEAM_ROLE_HIERARCHY["MANAGER"]:
-            raise serializers.ValidationError("Only Team Manager can modify team members.")
+        min_role = team.settings.update_member_min_role
+        
+        if TEAM_ROLE_HIERARCHY[acting_role] < TEAM_ROLE_HIERARCHY[min_role]:
+            raise serializers.ValidationError("You do not have permission to modify team members.")
 
         # Manager cannot change equal/higher roles
         if target_role and TEAM_ROLE_HIERARCHY[target_role] >= TEAM_ROLE_HIERARCHY[acting_role]:
             raise serializers.ValidationError("You cannot modify a member with equal or higher role.")
 
+        if TEAM_ROLE_HIERARCHY[new_role] >= TEAM_ROLE_HIERARCHY[acting_role]:
+            raise serializers.ValidationError("You cannot assign a role equal or higher than your own.")
+
         # Prevent downgrading the last manager
         if target_role == "MANAGER" and new_role != "MANAGER":
             manager_count = team.memberships.filter(role="MANAGER").count()
             if manager_count == 1:
-                raise serializers.ValidationError("Cannot remove the last manager.")
+                raise serializers.ValidationError("Cannot change the role of last remaining manager.")
             
         return attrs
