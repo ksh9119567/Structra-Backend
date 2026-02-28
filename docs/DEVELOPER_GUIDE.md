@@ -1,7 +1,7 @@
 # Developer Guide
 
 ## 🧱 Project Overview
-This backend powers a Jira-like task management app built with Django REST Framework, PostgreSQL, and Redis.
+Structra-Backed is a Jira-like task management backend built with Django REST Framework, PostgreSQL, and Redis.
 
 ## 📋 Recent Updates (February 2026)
 
@@ -26,8 +26,8 @@ This backend powers a Jira-like task management app built with Django REST Frame
 
 ### 1. Clone and Setup
 ```bash
-git clone https://github.com/<your-username>/task-app.git
-cd task-app
+git clone https://github.com/ksh9119567/Structra-Backend.git
+cd Structra-Backend
 cp .env.example .env
 docker-compose up --build
 ```

@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15
-    container_name: task_postgres
+    container_name: structra_postgres
     restart: always
     env_file: .env
     volumes:
@@ -17,7 +17,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: task_redis
+    container_name: structra_redis
     restart: always
     ports:
       - "6379:6379"
@@ -29,7 +29,7 @@ services:
 
   celery:
     build: .
-    container_name: task_celery
+    container_name: structra_celery
     restart: always
     command: celery -A config.celery worker --loglevel=info
     env_file: .env
@@ -41,7 +41,7 @@ services:
 
   web:
     build: .
-    container_name: django_app
+    container_name: structra_app
     restart: always
     depends_on:
       db:
