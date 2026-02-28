@@ -6,16 +6,25 @@
 
 ```bash
 # Show all OTP data
-python scripts/check_redis_otp.py
+python scripts/inspect_redis_data.py
 
 # Show only email OTPs
-python scripts/check_redis_otp.py email
+python scripts/inspect_redis_data.py email
 
 # Show only phone OTPs
-python scripts/check_redis_otp.py phone
+python scripts/inspect_redis_data.py phone
+
+# Show only login OTPs
+python scripts/inspect_redis_data.py login
+
+# Show only verify OTPs
+python scripts/inspect_redis_data.py verify
+
+# Show only password reset OTPs
+python scripts/inspect_redis_data.py password
 
 # Show only refresh tokens
-python scripts/check_redis_otp.py refresh
+python scripts/inspect_redis_data.py refresh
 ```
 
 ### 2. Using Redis CLI Directly
@@ -56,28 +65,34 @@ redis_client = settings.REDIS_CLIENT
 # Get all OTP keys
 redis_client.keys("otp:*")
 
-# Get specific OTP
-redis_client.get("otp:email:test@example.com")
+# Get specific login OTP
+redis_client.get("otp:login:email:test@example.com")
+
+# Get verify OTP
+redis_client.get("otp:verify:email:test@example.com")
 
 # Get TTL
-redis_client.ttl("otp:email:test@example.com")
+redis_client.ttl("otp:login:email:test@example.com")
 ```
 
 ## Redis Key Structure
 
 ### OTP Keys
 ```
-otp:{type}:{identifier}
-otp:email:user@example.com              # Email OTP
-otp:phone:9876543210                    # Phone OTP
+otp:{purpose}:{type}:{identifier}
 otp:login:email:user@example.com        # Login OTP (email)
-otp:password:email:user@example.com     # Password reset OTP
+otp:login:phone:9876543210              # Login OTP (phone)
+otp:verify:email:user@example.com       # Email verification OTP
+otp:verify:phone:9876543210             # Phone verification OTP
+otp:password:email:user@example.com     # Password reset OTP (email)
+otp:password:phone:9876543210           # Password reset OTP (phone)
 ```
 
 ### Attempt Counter Keys
 ```
-otp:{type}:{identifier}:attempts
-otp:email:user@example.com:attempts     # Failed email OTP attempts
+otp:{purpose}:{type}:{identifier}:attempts
+otp:login:email:user@example.com:attempts     # Failed login OTP attempts
+otp:verify:email:user@example.com:attempts    # Failed verify OTP attempts
 ```
 
 ### Refresh Token Keys
@@ -98,15 +113,15 @@ password_reset_token:{TOKEN_UUID}
 # 1. Request OTP
 curl -X POST http://127.0.0.1:8000/api/accounts/otp/email/ \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com"}'
+  -d '{"kind":"email","identifier":"test@example.com","purpose":"login"}'
 
 # 2. Check the OTP
-python scripts/check_redis_otp.py email
+python scripts/inspect_redis_data.py login
 
 # 3. Use the OTP to verify
-curl -X POST http://127.0.0.1:8000/api/accounts/otp/verify/email/ \
+curl -X POST http://127.0.0.1:8000/api/accounts/otp/verify/ \
   -H "Content-Type: application/json" \
-  -d '{"identifier":"test@example.com","otp":"233516"}'
+  -d '{"kind":"email","identifier":"test@example.com","otp":"233516"}'
 ```
 
 ## Redis Data Retention
@@ -141,6 +156,7 @@ redis-cli MGET key1 key2       # Get multiple keys
 **Q: Can't find the email in the OTP key format**
 - Use the exact email address used in the request
 - Email addresses are case-sensitive in Redis keys
+- Remember to use the new key format: `otp:{purpose}:{type}:{identifier}`
 
 **Q: Want to clear all test data**
 ```bash

@@ -1,11 +1,15 @@
 import os
 import redis
+import logging
 
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import timedelta
 
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
+logger.info("Loading environment variables from .env file")
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,7 +37,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_filters',
     'rest_framework',
+    'core',
     'app.accounts',
     'app.projects',
     'app.tasks',
@@ -41,6 +47,7 @@ INSTALLED_APPS = [
     'app.comments',
     'app.sprints',
     'app.organizations',
+    'app.governance.apps.GovernanceConfig',
 ]
 
 MIDDLEWARE = [
@@ -51,7 +58,55 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.ActivityTrackingMiddleware',
 ]
+
+# Create logs directory if it doesn't exist
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'activity_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'activity.log'),
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        # Activity tracking logger
+        'core.middleware.activity_tracking': {
+            'handlers': ['console', 'activity_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # General application logger
+        '': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
 
 ROOT_URLCONF = 'config.urls'
 
@@ -79,9 +134,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "task_db"),
-        "USER": os.getenv("POSTGRES_USER", "task_user"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "task1234"),
+        "NAME": os.getenv("POSTGRES_DB", "structra_db"),
+        "USER": os.getenv("POSTGRES_USER", "structra_user"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "structra1234"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
@@ -93,6 +148,7 @@ REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
 # Initialize Redis client as a Django setting so services can access it via settings.redis_client
+logger.info(f"Initializing Redis client: host={REDIS_HOST}, port={REDIS_PORT}, db={REDIS_DB}")
 REDIS_CLIENT = redis.StrictRedis(
     host=REDIS_HOST,
     port=REDIS_PORT,
@@ -100,6 +156,7 @@ REDIS_CLIENT = redis.StrictRedis(
     password=REDIS_PASSWORD,
     decode_responses=True
 )
+logger.info("Redis client initialized successfully")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -146,11 +203,19 @@ AUTH_USER_MODEL = 'accounts.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'app.accounts.services.authentication.ValidatedJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 SIMPLE_JWT = {
