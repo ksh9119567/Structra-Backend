@@ -1,6 +1,6 @@
 # Setup & Installation Guide
 
-This guide explains how to run the Task App using Docker (recommended) or on your local machine without Docker.
+This guide explains how to run Structra-Backend using Docker (recommended) or on your local machine without Docker.
 
 ## Prerequisites
 
@@ -24,8 +24,8 @@ Docker automatically handles all service setup and configuration.
 ### Step 1: Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd Task-app
+git clone https://github.com/ksh9119567/Structra-Backend.git
+cd Structra-Backend
 ```
 
 ### Step 2: Create Environment Configuration
@@ -71,7 +71,7 @@ All services should show "Up" status.
 
 - **API**: http://localhost:8000
 - **Admin Panel**: http://localhost:8000/admin
-- **Database**: localhost:5432 (user: `task_user`)
+- **Database**: localhost:5432 (user: `structra_user`)
 - **Redis**: localhost:6379
 
 ### Create Superuser (Optional)
@@ -162,8 +162,8 @@ sudo systemctl enable redis-server
 ### Step 1: Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd Task-app
+git clone https://github.com/ksh9119567/Structra-Backend.git
+cd Structra-Backend
 ```
 
 ### Step 2: Create Virtual Environment
@@ -196,8 +196,8 @@ cp .env.example .env
 Edit `.env` with local database settings:
 ```env
 SECRET_KEY=<generate-new-secret-key>
-POSTGRES_DB=task_db
-POSTGRES_USER=task_user
+POSTGRES_DB=structra_db
+POSTGRES_USER=structra_user
 POSTGRES_PASSWORD=<your-password>
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
@@ -224,10 +224,10 @@ psql -U postgres
 
 In the PostgreSQL shell:
 ```sql
-CREATE DATABASE task_db;
-CREATE USER task_user WITH PASSWORD '<your-password>';
-GRANT ALL PRIVILEGES ON DATABASE task_db TO task_user;
-ALTER DATABASE task_db OWNER TO task_user;
+CREATE DATABASE structra_db;
+CREATE USER structra_user WITH PASSWORD '<your-password>';
+GRANT ALL PRIVILEGES ON DATABASE structra_db TO structra_user;
+ALTER DATABASE structra_db OWNER TO structra_user;
 \\q
 ```
 
@@ -457,8 +457,8 @@ SECRET_KEY=<your-secret-key>
 DEBUG=False  # Set to False in production
 
 # Database
-POSTGRES_DB=task_db
-POSTGRES_USER=task_user
+POSTGRES_DB=structra_db
+POSTGRES_USER=structra_user
 POSTGRES_PASSWORD=<your-password>
 POSTGRES_HOST=db          # Use 'db' for Docker, 'localhost' for local
 POSTGRES_PORT=5432
@@ -480,7 +480,7 @@ EMAIL_PORT=587
 EMAIL_HOST_USER=<your-email@gmail.com>
 EMAIL_HOST_PASSWORD=<your-app-password>
 EMAIL_USE_TLS=True
-DEFAULT_FROM_EMAIL=TaskApp <no-reply@taskapp.local>
+DEFAULT_FROM_EMAIL=Structra <no-reply@structra.local>
 ```
 
 ---

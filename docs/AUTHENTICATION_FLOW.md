@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the authentication and authorization flow in the Task App. The system uses JWT (JSON Web Tokens) for stateless authentication combined with role-based access control (RBAC).
+This document describes the authentication and authorization flow in Structra-Backend. The system uses JWT (JSON Web Tokens) for stateless authentication combined with role-based access control (RBAC).
 
 ---
 

@@ -2,8 +2,8 @@
 DO
 $do$
 BEGIN
-   IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'task_db') THEN
-      CREATE DATABASE task_db;
+   IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'structra_db') THEN
+      CREATE DATABASE structra_db;
    END IF;
 END
 $do$;
@@ -12,12 +12,12 @@ $do$;
 DO
 $do$
 BEGIN
-   IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'task_user') THEN
-      CREATE USER task_user WITH PASSWORD 'task1234';
+   IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'structra_user') THEN
+      CREATE USER structra_user WITH PASSWORD 'structra1234';
    END IF;
 END
 $do$;
 
 -- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE task_db TO task_user;
-ALTER DATABASE task_db OWNER TO task_user;
+GRANT ALL PRIVILEGES ON DATABASE structra_db TO structra_user;
+ALTER DATABASE structra_db OWNER TO structra_user;
