@@ -35,38 +35,46 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         
     def validate(self, attrs):
         request = self.context["request"]
+        user = request.user
         project_id = attrs.get("project_id")
         parent_id = attrs.get("parent_id", None)
-        
+
         try:
-            project = Project.objects.get(id=project_id)    
-            min_role = project.settings.create_task_min_role
-        
-            if parent_id:
-                try:
-                    parent_task = Task.objects.get(id=parent_id)
-                    if parent_task.project.id != project_id:
-                        raise serializers.ValidationError("Parent task must belong to the same project.")
-                except Task.DoesNotExist:
-                    raise serializers.ValidationError("Parent task not found.")
-                
-                role = effective_role(request.user, parent_task.project)
-                if parent_task.assigned_to != request.user or parent_task.created_by != request.user or project.created_by != request.user:
-                    raise serializers.ValidationError("You do not have permission to create a subtask in this project.")
-                
-                attrs["parent"] = parent_task
-            
+            project = Project.objects.get(id=project_id, is_deleted=False)
         except Project.DoesNotExist:
             raise serializers.ValidationError("Project not found.")
-        
+        min_role = project.settings.create_task_min_role
+
+        parent_task = None
+        if parent_id:
+            try:
+                parent_task = Task.objects.get(id=parent_id, is_deleted=False)
+            except Task.DoesNotExist:
+                raise serializers.ValidationError("Parent task not found.")
+
+            if parent_task.project_id != project.id:
+                raise serializers.ValidationError("Parent task must belong to the same project.")
+            if parent_task.parent_id is not None:
+                raise serializers.ValidationError("Subtasks cannot be nested more than one level deep.")
+
+            attrs["parent"] = parent_task
+
         attrs["project"] = project
-        
-        role = effective_role(request.user, project)
-        if PROJECT_ROLE_HIERARCHY.get(role, -1) < PROJECT_ROLE_HIERARCHY[min_role]:
+
+        rank = PROJECT_ROLE_HIERARCHY.get(effective_role(user, project), -1)
+
+        # The creator or assignee of the parent task may always add subtasks to
+        # it (mirrors TaskAPI.check_role_permissions); everyone else needs the
+        # project's create_task_min_role. Either way a read-only member
+        # (VIEWER / GUEST) can never create work items.
+        owns_parent = parent_task is not None and user in (parent_task.created_by, parent_task.assigned_to)
+        if rank < PROJECT_ROLE_HIERARCHY["CONTRIBUTOR"] or (
+            not owns_parent and rank < PROJECT_ROLE_HIERARCHY[min_role]
+        ):
             raise serializers.ValidationError("You do not have permission to create a task in this project.")
-        
+
         return attrs
-    
+
     def create(self, validated_data):
         request = self.context["request"]
         task = Task.objects.create(created_by=request.user, **validated_data)

@@ -6,7 +6,7 @@ from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 
@@ -30,11 +30,12 @@ from services.invite_token_service import verify_invite_token
 
 from core.utils.base_utils import get_user, add_member
 from core.utils.org_utils import get_org, get_org_membership
-from core.utils.team_utils import get_team, get_all_team_memberships, get_team_membership
+from core.utils.team_utils import get_team, get_all_team_memberships
 from core.pagination import StandardPagination
 from core.constants.team_constant import TEAM_ROLE_HIERARCHY, TEAM_ACTION_POLICIES
 from core.constants.org_constant import ORG_ROLE_HIERARCHY
 from core.permissions.base import get_team_role, get_org_role
+from core.permissions.resolver import can_view_team, is_team_governance_backstop
 
 from app.governance.services.rules_engine import GovernanceResolver
 from core.permissions.mixins import RoleCheckerMixin, EnforceObjectPermissionsMixin
@@ -136,17 +137,13 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
             return True
     
     def check_user_team_permission(self, user, team):
-        try:
-            if get_team_membership(team.id, user):
-                return True
-        except ValidationError as e:
-            if team.organization_id:
-                id = team.organization_id
-                org = get_org_membership(id, user).organization
-                if org:
-                    return True
-            else:
-                raise e
+        """
+        Read access: team members, and members of the team's organization.
+        Everyone else gets a 403.
+        """
+        if not can_view_team(user, team):
+            raise PermissionDenied("You do not have access to this team.")
+        return True
     
     def get_serializer_class(self):
         if self.action == "create":
@@ -165,13 +162,20 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
             return TeamMembershipFilter
         return TeamFilter
     
+    def get_search_fields(self):
+        if self.action == "members":
+            return ["user__email"]
+        return self.search_fields
+
     def get_ordering_fields(self):
         if self.action == "members":
             return ["joined_at"]
         return ["created_at"]
-        
+
     def apply_filters(self, request, queryset):
+        self.filterset_class = self.get_filterset_class()
         self.ordering_fields = self.get_ordering_fields()
+        self.search_fields = self.get_search_fields()
         
         django_filter = DjangoFilterBackend()
         queryset = django_filter.filter_queryset(request, queryset, self)
@@ -292,7 +296,8 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
         team = get_team(team_id)
         self.check_user_team_permission(request.user, team)
         
-        members = get_all_team_memberships(team_id)
+        # Apply the role filter / search / ordering (they were declared but never used).
+        members = self.apply_filters(request, get_all_team_memberships(team_id))
 
         page = self.pagination_class.paginate_queryset(members, request)
         logger.debug(f"Found {len(page)} members for team: {team.name}")
@@ -326,12 +331,8 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
         logger.info(f"Sending invite to {email} for team: {team_id} by user: {request.user.email}")
         team = self.permission_object
 
-        is_org_owner = False
-        if team.organization_id:
-            org = get_org_membership(team.organization_id, request.user).organization
-            is_org_owner = get_org_role(request.user, org) == "OWNER"
-        
-        if not is_org_owner:
+        # The org owner (governance backstop) bypasses the team's policy gate.
+        if not is_team_governance_backstop(request.user, team):
             self.check_role_permissions(request, team)
 
         
@@ -383,12 +384,8 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
         logger.info(f"Updating member {email} in team: {team_id} by user: {request.user.email}")
         team = self.permission_object
 
-        is_org_owner = False
-        if team.organization_id:
-            org = get_org_membership(team.organization_id, request.user).organization
-            is_org_owner = get_org_role(request.user, org) == "OWNER"
-        
-        if not is_org_owner:
+        # The org owner (governance backstop) bypasses the team's policy gate.
+        if not is_team_governance_backstop(request.user, team):
             self.check_role_permissions(request, team)
 
         target_user = get_user(email, kind="email")
@@ -427,12 +424,8 @@ class TeamAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.ViewSet)
         logger.info(f"Removing member {email} from team: {team_id} by user: {request.user.email}")
         team = self.permission_object
 
-        is_org_owner = False
-        if team.organization_id:
-            org = get_org_membership(team.organization_id, request.user).organization
-            is_org_owner = get_org_role(request.user, org) == "OWNER"
-        
-        if not is_org_owner:
+        # The org owner (governance backstop) bypasses the team's policy gate.
+        if not is_team_governance_backstop(request.user, team):
             self.check_role_permissions(request, team)
 
         user = get_user(email, kind="email")

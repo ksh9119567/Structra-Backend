@@ -71,15 +71,14 @@ docs/        # internal documentation
 
 ## 🧪 Testing
 ```bash
-docker-compose exec web python manage.py test --verbosity=2
+python manage.py test                 # whole suite - no Postgres / Redis / Docker needed
+scripts/run_tests.sh teams projects   # per app (Windows: .\scripts\run_tests.ps1 teams projects)
+docker-compose exec web python manage.py test
 ```
 
-Test files are located in each app's `tests.py`:
-- `app/accounts/tests.py` - User model and registration tests
-- `app/organizations/tests.py` - Organization model and API tests
-- `app/teams/tests.py` - Team model and API tests
-- `app/projects/tests.py` - Project model and API tests
-- `app/tasks/tests.py` - Task model and API tests
+Every app has a `tests/` package (`app/<app>/tests/`, shared helpers in `core/testing/`,
+cross-cutting tests in `core/tests/`). See [TESTING.md](TESTING.md) for per-app commands,
+what is covered, and how to write new tests.
 
 ---
 

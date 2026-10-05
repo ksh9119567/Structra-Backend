@@ -46,9 +46,9 @@ def transfer_project_ownership(*, project, new_owner, performed_by):
 
 def delete_project(*, project, performed_by):
     logger.info(f"Deleting project: {project.name}")
-    if project.created_by != performed_by:
-        logger.warning(f"Non-creator {performed_by.email} attempted to delete project: {project.name}")
-        raise PermissionDenied("Only project creator can delete project")
+    if project.created_by != performed_by and not is_governance_backstop(performed_by, project):
+        logger.warning(f"Unauthorized delete attempt by {performed_by.email} for project: {project.name}")
+        raise PermissionDenied("Only the project creator or a governance backstop (org/owning-team owner) can delete the project")
 
     project.is_deleted = True
     project.save(update_fields=["is_deleted"])

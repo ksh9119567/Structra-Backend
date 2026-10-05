@@ -40,7 +40,8 @@ class ActivityTrackingMiddleware(MiddlewareMixin):
     
     def process_request(self, request):
         """Mark the start time of the request"""
-        request._start_time = time.time()
+        # perf_counter: monotonic and high-resolution (time.time() is ~15 ms coarse on Windows)
+        request._start_time = time.perf_counter()
         request._should_track = self._should_track_request(request)
         
     def process_response(self, request, response):
@@ -75,7 +76,7 @@ class ActivityTrackingMiddleware(MiddlewareMixin):
         # Calculate response time
         response_time = None
         if hasattr(request, '_start_time'):
-            response_time = (time.time() - request._start_time) * 1000
+            response_time = (time.perf_counter() - request._start_time) * 1000
         
         # Extract user info
         user = None
@@ -110,7 +111,7 @@ class ActivityTrackingMiddleware(MiddlewareMixin):
             query_params=query_params,
             request_body=request_body,
             status_code=response.status_code,
-            response_time_ms=round(response_time, 2) if response_time else None,
+            response_time_ms=round(response_time, 2) if response_time is not None else None,
             ip_address=self._get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             extra_data=self._get_extra_data(request, response)
@@ -120,7 +121,7 @@ class ActivityTrackingMiddleware(MiddlewareMixin):
         logger.info(
             f"Activity: {username} | {action} | {resource_type} | "
             f"{request.method} {request.path} | Status: {response.status_code} | "
-            f"Time: {round(response_time, 2) if response_time else 'N/A'}ms"
+            f"Time: {round(response_time, 2) if response_time is not None else 'N/A'}ms"
         )
     
     def _determine_action(self, request, response):

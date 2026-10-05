@@ -1,3 +1,5 @@
+from django.db import transaction
+
 from rest_framework import serializers
 
 from app.teams.models import Team, TeamMembership
@@ -5,6 +7,7 @@ from app.accounts.models import User
 from app.organizations.models import Organization, OrganizationMembership
 from app.organizations.models import Organization
 from core.permissions.base import get_org_role, get_team_role
+from core.permissions.resolver import team_member_admin_role
 from core.constants.team_constant import TEAM_ROLES, TEAM_ROLE_HIERARCHY
 from core.constants.org_constant import ORG_ROLE_HIERARCHY
 
@@ -40,19 +43,20 @@ class TeamCreateSerializer(serializers.ModelSerializer):
         
         if org_id:
             try:
-                org = Organization.objects.get(id=org_id)
-                if org.settings.max_teams == org.teams.count():
-                    raise serializers.ValidationError("Organization has reached maximum team limit.")
-                
+                org = Organization.objects.get(id=org_id, is_deleted=False)
             except Organization.DoesNotExist:
                 raise serializers.ValidationError("Organization not found.")
 
             # Check Org permission (Admin or Owner)
             role = get_org_role(request.user, org)
             min_role = org.settings.create_team_min_role
-            
-            if ORG_ROLE_HIERARCHY[role] < ORG_ROLE_HIERARCHY[min_role]:
+
+            if ORG_ROLE_HIERARCHY.get(role, -1) < ORG_ROLE_HIERARCHY[min_role]:
                 raise serializers.ValidationError("You do not have permission to create a team.")
+
+            # Soft-deleted teams no longer count against the quota.
+            if org.teams.filter(is_deleted=False).count() >= org.settings.max_teams:
+                raise serializers.ValidationError("Organization has reached maximum team limit.")
 
             attrs["organization"] = org
             
@@ -62,13 +66,15 @@ class TeamCreateSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         org = validated_data.pop("organization", None)
 
-        team = Team.objects.create(created_by=request.user, **validated_data)
+        # All-or-nothing: never leave a team behind without its Owner membership.
+        with transaction.atomic():
+            team = Team.objects.create(created_by=request.user, **validated_data)
 
-        if org:
-            team.organization = org
-            team.save()
+            if org:
+                team.organization = org
+                team.save()
 
-        TeamMembership.objects.create(user=request.user, team=team, role="OWNER")
+            TeamMembership.objects.create(user=request.user, team=team, role="OWNER")
         return team
 
 
@@ -98,25 +104,29 @@ class InviteMemberSerializer(serializers.Serializer):
     
     
 class TeamMemberUpdateSerializer(serializers.Serializer):
-    role = serializers.ChoiceField(choices=[r[0] for r in TEAM_ROLES], required=False)
+    role = serializers.ChoiceField(choices=[r[0] for r in TEAM_ROLES])
 
     def validate(self, attrs):
         request = self.context["request"]
         team = self.context["team"]
         target_user = self.context["member_user"]
 
-        acting_role = get_team_role(request.user, team)
+        # An org owner (governance backstop) acts with team-Owner authority.
+        acting_role = team_member_admin_role(request.user, team)
         target_role = get_team_role(target_user, team)
 
-        new_role = attrs.get("role")
-        
+        if target_role is None:
+            raise serializers.ValidationError("User is not a member of this team.")
+
+        new_role = attrs["role"]
+
         min_role = team.settings.update_member_min_role
-        
-        if TEAM_ROLE_HIERARCHY[acting_role] < TEAM_ROLE_HIERARCHY[min_role]:
+
+        if TEAM_ROLE_HIERARCHY.get(acting_role, -1) < TEAM_ROLE_HIERARCHY[min_role]:
             raise serializers.ValidationError("You do not have permission to modify team members.")
 
         # Manager cannot change equal/higher roles
-        if target_role and TEAM_ROLE_HIERARCHY[target_role] >= TEAM_ROLE_HIERARCHY[acting_role]:
+        if TEAM_ROLE_HIERARCHY[target_role] >= TEAM_ROLE_HIERARCHY[acting_role]:
             raise serializers.ValidationError("You cannot modify a member with equal or higher role.")
 
         if TEAM_ROLE_HIERARCHY[new_role] >= TEAM_ROLE_HIERARCHY[acting_role]:

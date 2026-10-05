@@ -7,7 +7,9 @@ from app.teams.models import TeamMembership
 from services.invite_token_service import store_invite_token
 from services.notification_services import send_invite_email
 
-from core.constants.team_constant import TEAM_ROLES
+from core.constants.team_constant import TEAM_ROLES, TEAM_ROLE_HIERARCHY
+from core.permissions.resolver import team_member_admin_role
+from core.utils.role_utils import ensure_can_grant_role
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,12 @@ def send_team_invite(*, team, user, invited_by, role):
     if role not in [r[0] for r in TEAM_ROLES]:
         logger.error(f"Invalid role '{role}' provided for team invite to {user.email}")
         raise ValidationError("Invalid role specified")
+
+    ensure_can_grant_role(
+        role=role,
+        granter_role=team_member_admin_role(invited_by, team),
+        hierarchy=TEAM_ROLE_HIERARCHY,
+    )
 
     invite_token = store_invite_token(
         user_id=user.id,
