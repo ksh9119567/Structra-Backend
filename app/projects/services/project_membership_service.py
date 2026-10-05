@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from app.projects.models import ProjectMembership
 
 from core.utils.project_utils import count_explicit_members
-from core.permissions.resolver import effective_role
+from core.permissions.resolver import effective_role, member_admin_role
 from core.constants.project_constant import PROJECT_ROLE_HIERARCHY
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,9 @@ def remove_project_member(*, project, user, performed_by):
         )
 
     target_user_role = effective_role(user, project)
-    action_user_role = effective_role(performed_by, project)
+    # A governance backstop acts with Owner authority (see member_admin_role),
+    # so they are not rejected merely for not being an explicit member.
+    action_user_role = member_admin_role(performed_by, project)
 
     if PROJECT_ROLE_HIERARCHY.get(target_user_role, -1) >= PROJECT_ROLE_HIERARCHY.get(action_user_role, -1):
         logger.warning(f"Attempt to remove user with equal or higher role from project: {project.name}")

@@ -49,7 +49,7 @@ def _team_derived_role(user, project):
     """
     roles = [
         link.role for link in project.all_team_links
-        if get_team_role(user, link.team) is not None
+        if not link.team.is_deleted and get_team_role(user, link.team) is not None
     ]
     if not roles:
         return None
@@ -73,6 +73,68 @@ def effective_role(user, project):
     if not ranked:
         return None
     return max(ranked, key=lambda role: PROJECT_ROLE_HIERARCHY.get(role, -1))
+
+
+def member_admin_role(user, project):
+    """
+    The role `user` acts with when administering project members (updating
+    or removing someone, granting a role via invite). A governance backstop
+    (org / owning-team owner) acts with the full authority of a project
+    Owner here - the same bypass can_override_member_policy() already gives
+    them over the member-management policy gate - so the rank comparisons
+    in the membership services and serializers don't lock them out just
+    because they are not an explicit member. Everyone else acts with their
+    ordinary effective_role().
+    """
+    if can_override_member_policy(user, project):
+        return "OWNER"
+    return effective_role(user, project)
+
+
+def is_team_governance_backstop(user, team):
+    """
+    True if `user` owns the organization that `team` belongs to - the
+    continuity-only override for a team the user may not be a member of
+    (reassign / delete / member administration). Standalone teams have no
+    container above them, so nobody is a backstop for those.
+    """
+    if team is None or user is None or not getattr(user, "is_authenticated", False):
+        return False
+    return bool(team.organization_id) and get_org_role(user, team.organization) == "OWNER"
+
+
+def team_member_admin_role(user, team):
+    """
+    Team counterpart of member_admin_role(): an org owner administers the
+    team's members with the authority of a team Owner.
+    """
+    if is_team_governance_backstop(user, team):
+        return "OWNER"
+    return get_team_role(user, team)
+
+
+def can_view_project(user, project):
+    """
+    Read access to a project: anyone with an effective project role
+    (explicit membership or via an assigned team), or any member of the
+    project's organization.
+    """
+    if project is None or user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if effective_role(user, project) is not None:
+        return True
+    return bool(project.organization_id) and get_org_role(user, project.organization) is not None
+
+
+def can_view_team(user, team):
+    """
+    Read access to a team: its members, or any member of its organization.
+    """
+    if team is None or user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if get_team_role(user, team) is not None:
+        return True
+    return bool(team.organization_id) and get_org_role(user, team.organization) is not None
 
 
 def _team_owner(team):

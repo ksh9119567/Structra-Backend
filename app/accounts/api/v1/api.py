@@ -169,6 +169,10 @@ class GetUserAPI(APIView):
         
         except Exception as e:
             logger.error(f"Error deleting user account for user: {request.user.email}, error: {str(e)}")
+            return Response(
+                {"message": "Could not delete the account. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
     
 # ---------------------------------------
 # OTP: Email / Phone Verification & Login
@@ -239,6 +243,9 @@ class OTPLoginAPI(APIView):
             serializer.validated_data["identifier"],
             serializer.validated_data["kind"],
         )
+        if not user or not user.is_active:
+            logger.warning(f"OTP login refused, no active account for: {serializer.validated_data['identifier']}")
+            return Response({"message": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
         refresh, access = login_user(user)
         logger.info(f"User logged in via OTP: {user.email}")

@@ -37,7 +37,10 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         Regular users can view their own activities.
         Admin users can view all activities.
         """
-        if self.action in ['list', 'retrieve']:
+        # my_activities and stats are scoped to the caller's own activity in
+        # get_queryset(), so any authenticated user may use them (they used to
+        # fall through to IsAdminUser).
+        if self.action in ['list', 'retrieve', 'my_activities', 'stats']:
             return [IsAuthenticated()]
         return [IsAdminUser()]
     

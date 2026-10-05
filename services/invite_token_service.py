@@ -50,14 +50,19 @@ def verify_invite_token(request_user, invite_type, token: str):
         raise ValidationError("Invite token not found or expired")
     try:
         val = json.loads(json_val)
-        if str(request_user.id) != val["user_id"]:
-            logger.warning(f"Token mismatch during invite token validation, type: {invite_type}")
-            raise PermissionDenied("Token does not belong to user")
-        delete_invite_token(invite_type, token)
-        logger.info(f"Invite token verified successfully for user {val['user_id']}, type: {invite_type}")
-        return val
-    except Exception as e:
+        token_user_id = val["user_id"]
+    except (ValueError, KeyError, TypeError) as e:
         # stored value was not in expected format
         logger.error(f"Error verifying invite token, type: {invite_type}, error: {str(e)}")
-        return None
+        raise ValidationError("Invite token is invalid")
+
+    # Outside the try block on purpose: this PermissionDenied used to be
+    # swallowed and turned into `None`, which the callers then crashed on (HTTP 500).
+    if str(request_user.id) != token_user_id:
+        logger.warning(f"Token mismatch during invite token validation, type: {invite_type}")
+        raise PermissionDenied("Token does not belong to user")
+
+    delete_invite_token(invite_type, token)
+    logger.info(f"Invite token verified successfully for user {token_user_id}, type: {invite_type}")
+    return val
     

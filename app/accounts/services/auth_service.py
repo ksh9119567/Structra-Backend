@@ -20,15 +20,19 @@ def login_user(user):
 
 def logout_user(*, refresh_token, access_token, request_user):
     logger.info(f"Logging out user: {request_user.email}")
+    uid = None
     try:
         token = RefreshToken(refresh_token)
         uid = token.get("user_id") or token.get("user")
-        if uid and str(uid) != str(request_user.id):
-            logger.warning(f"Token mismatch during logout for user: {request_user.email}")
-            raise PermissionDenied("Token does not belong to user")
     except Exception as e:
+        # An unparsable / missing refresh token is not an error for logout itself.
         logger.error(f"Error during logout token validation: {str(e)}")
-        pass
+
+    # Checked outside the try block: it used to be swallowed by the blanket
+    # `except Exception`, so a user could revoke another user's session.
+    if uid and str(uid) != str(request_user.id):
+        logger.warning(f"Token mismatch during logout for user: {request_user.email}")
+        raise PermissionDenied("Token does not belong to user")
 
     delete_refresh_token(refresh_token)
     if access_token:

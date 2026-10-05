@@ -2,6 +2,7 @@ import re
 from datetime import timedelta
 
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer, TokenObtainSerializer, TokenRefreshSerializer
@@ -33,6 +34,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         
     def validate_phone_number(self, value):
         user = self.instance
+        if not value:
+            return value  # blank clears the number
         phone = re.sub(r'[\s\-\(\)]', '', value)
         if not re.match(r'^\+?1?\d{9,15}$', phone):
             raise serializers.ValidationError("Enter a valid phone number.")
@@ -61,6 +64,21 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["email", "username", "first_name", "last_name", "password", "phone_number"]
+
+    def validate_email(self, value):
+        # The model's unique constraint is case-sensitive, but every lookup
+        # (login, OTP, invites) is case-insensitive - so A@x.com and a@x.com
+        # must not both be registrable.
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("user with this email already exists.")
+        return value
+
+    def validate_phone_number(self, value):
+        # phone_no has no DB uniqueness; phone-based OTP / reset flows look the
+        # user up by it, so duplicates would make those lookups ambiguous.
+        if value and User.objects.filter(phone_no=value).exists():
+            raise serializers.ValidationError("Phone number is already in use.")
+        return value
 
     def create(self, validated_data):
         # serializer `source` mapping puts phone_no into validated_data when provided
@@ -102,6 +120,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         refresh = self.token_class(attrs['refresh'])
+
+        # A deactivated or soft-deleted account must not keep minting tokens.
+        user = User.objects.filter(
+            **{api_settings.USER_ID_FIELD: refresh.get(api_settings.USER_ID_CLAIM)}
+        ).first()
+        if user is None or not user.is_active or user.is_deleted:
+            raise AuthenticationFailed("User is inactive or deleted.", code="user_inactive")
+
         remember_me = bool(refresh.get('remember_me', False))
         data = {'access': str(refresh.access_token)}
         if api_settings.ROTATE_REFRESH_TOKENS:

@@ -1,11 +1,13 @@
 import logging
 
+from django.db.models import Q
+
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 
@@ -33,7 +35,7 @@ from core.utils.base_utils import get_user, add_member
 from core.utils.org_utils import get_org, get_org_membership
 from core.utils.team_utils import get_team, get_team_membership
 from core.utils.project_utils import (
-    get_project, get_all_project_memberships, get_project_membership, get_stale_explicit_members,
+    get_project, get_all_project_memberships, get_stale_explicit_members,
 )
 from core.constants.project_constant import PROJECT_ROLE_HIERARCHY, PROJECT_ACTION_POLICIES
 from core.constants.org_constant import ORG_ROLE_HIERARCHY
@@ -46,7 +48,7 @@ from core.permissions.team import IsTeamMember
 from core.permissions.combined import (
     IsOrgOwnerOrProjectLead, IsOrgOwnerOrProjectManager, IsOrgOwnerOrProjectOwner,
 )
-from core.permissions.resolver import can_override_member_policy, effective_role
+from core.permissions.resolver import can_override_member_policy, can_view_project, effective_role
 from core.pagination import StandardPagination
 
 from app.governance.services.rules_engine import GovernanceResolver
@@ -137,29 +139,40 @@ class ProjectAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.Model
 
         return True
     
-    def check_user_permission(self, user, id):
-        if self.action != "create" or id is None:
+    def check_user_permission(self, user, org_id, team_id):
+        """
+        Policy gate for project creation. The scope is the organization when
+        one is given, otherwise the team; a standalone project (neither) is
+        always allowed. A caller who is not a member of the named scope is
+        refused here - they used to fall through to "allowed" and only trip
+        over a KeyError later in the serializer.
+        """
+        if self.action != "create":
             return True
 
-        # Resolve the scope (organization first, then team) and the acting role.
-        try:
-            org = get_org_membership(id, user).organization
+        if org_id:
+            try:
+                org = get_org_membership(org_id, user).organization
+            except NotFound:
+                raise NotFound("Either Organization does not exist or you are not a member of it.")
             role = get_org_role(user, org)
             hierarchy = ORG_ROLE_HIERARCHY
             min_role_required = org.settings.create_project_min_role
             # The flag gates non-owners only; the owner can always create.
             if role != "OWNER" and org.settings.allow_project_creation == False:
                 raise ValidationError("You are not allowed to create projects in this organization.")
-        except NotFound:
+        elif team_id:
             try:
-                team = get_team_membership(id, user).team
-                role = get_team_role(user, team)
-                hierarchy = TEAM_ROLE_HIERARCHY
-                min_role_required = team.settings.create_project_min_role
-                if role != "OWNER" and team.settings.allow_project_creation == False:
-                    raise ValidationError("You are not allowed to create projects in this team.")
+                team = get_team_membership(team_id, user).team
             except NotFound:
-                return True
+                raise NotFound("Either Team does not exist or you are not a member of it.")
+            role = get_team_role(user, team)
+            hierarchy = TEAM_ROLE_HIERARCHY
+            min_role_required = team.settings.create_project_min_role
+            if role != "OWNER" and team.settings.allow_project_creation == False:
+                raise ValidationError("You are not allowed to create projects in this team.")
+        else:
+            return True
 
         if not self.has_minimum_role(role, min_role_required, hierarchy):
             raise ValidationError(f"You must have at least {min_role_required} role to perform this action.")
@@ -168,23 +181,14 @@ class ProjectAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.Model
             
     
     def check_user_project_permission(self, user, project):
-        try:
-            if get_project_membership(project.id, user):
-                return True
-        except ValidationError as e:
-            if project.organization_id:
-                id = project.organization_id
-                org = get_org_membership(id, user).organization
-                if org:
-                    return True
-            elif project.team_id:
-                id = project.team_id
-                team = get_team_membership(id, user).team
-                if team and project.team_id == team.id:
-                    return True
-            else:
-                raise e
-            
+        """
+        Read access: explicit members, members of any assigned team, and
+        members of the project's organization. Everyone else gets a 403.
+        """
+        if not can_view_project(user, project):
+            raise PermissionDenied("You do not have access to this project.")
+        return True
+
     def get_serializer_class(self):
         if self.action == "create":
             return ProjectCreateSerializer
@@ -230,7 +234,14 @@ class ProjectAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.Model
         
     def list(self, request):
         logger.info(f"Listing projects for user: {request.user.email}")
-        projects = self.apply_filters(request, Project.objects.filter(members=request.user, is_deleted=False).distinct())
+        # "My projects" = explicit memberships plus projects reached through a
+        # team the user belongs to (team-derived access is never materialised
+        # as a ProjectMembership row, so filtering on `members` alone hid them).
+        accessible = Q(members=request.user) | Q(
+            team_links__team__memberships__user=request.user,
+            team_links__team__is_deleted=False,
+        )
+        projects = self.apply_filters(request, Project.objects.filter(accessible, is_deleted=False).distinct())
 
         page = self.pagination_class.paginate_queryset(projects, request)
         logger.debug(f"Found {len(page)} projects for user: {request.user.email}")
@@ -242,8 +253,11 @@ class ProjectAPI(EnforceObjectPermissionsMixin, RoleCheckerMixin, viewsets.Model
 
     def create(self, request):
         logger.info(f"Creating project by user: {request.user.email}, name: {request.data.get('name')}")
-        id = request.data.get("organization_id") or request.data.get("team_id") if request.data.get("organization_id") or request.data.get("team_id") else None
-        self.check_user_permission(request.user, id)
+        self.check_user_permission(
+            request.user,
+            request.data.get("organization_id") or None,
+            request.data.get("team_id") or None,
+        )
         
         serializer_class = self.get_serializer_class()
         serializer = serializer_class(

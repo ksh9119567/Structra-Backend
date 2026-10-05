@@ -1,6 +1,6 @@
 import logging
 
-from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
 
 from app.organizations.models import OrganizationMembership
 
@@ -35,8 +35,12 @@ def remove_member(*, organization, user, performed_by):
 
     target_user_role = get_org_role(user, organization)
     action_user_role = get_org_role(performed_by, organization)
-    
-    if ORG_ROLE_HIERARCHY[target_user_role] >= ORG_ROLE_HIERARCHY[action_user_role]:
+
+    if target_user_role is None:
+        logger.warning(f"Attempt to remove non-member {user.email} from organization: {organization.name}")
+        raise ValidationError("User is not a member of this organization")
+
+    if ORG_ROLE_HIERARCHY[target_user_role] >= ORG_ROLE_HIERARCHY.get(action_user_role, -1):
         logger.warning(f"Attempt to remove user with equal or higher role from organization: {organization.name}")
         raise PermissionDenied("Cannot remove user with equal or higher role")
 
@@ -76,10 +80,13 @@ def self_remove(*, organization, user):
 
 def update_role(*, organization, user, role):
     logger.info(f"Updating role for {user.email} in organization: {organization.name} to {role}")
-    membership = OrganizationMembership.objects.get(
-        organization=organization,
-        user=user
-    )
+    try:
+        membership = OrganizationMembership.objects.get(
+            organization=organization,
+            user=user
+        )
+    except OrganizationMembership.DoesNotExist:
+        raise NotFound("User is not a member of this organization")
     membership.role = role
     membership.save()
     logger.info(f"Role updated successfully for {user.email} in organization: {organization.name}")

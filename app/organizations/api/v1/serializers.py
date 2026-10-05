@@ -18,10 +18,10 @@ class OrganizationSerializer(serializers.ModelSerializer):
         return obj.members.count()
 
     def get_team_count(self, obj):
-        return obj.teams.count()
+        return obj.teams.filter(is_deleted=False).count()
 
     def get_project_count(self, obj):
-        return obj.projects.count()
+        return obj.projects.filter(is_deleted=False).count()
 
     def get_owner_email(self, obj):
         return obj.owner.email
@@ -77,6 +77,11 @@ class OrganizationMemberUpdateSerializer(serializers.Serializer):
         acting_role = get_org_role(acting_user, organization)
         target_role = get_org_role(target_user, organization)
         new_role = attrs["role"]
+
+        if acting_role is None:
+            raise serializers.ValidationError("You are not a member of this organization.")
+        if target_role is None:
+            raise serializers.ValidationError("User is not a member of this organization.")
 
         # Prevent lower rank editing higher rank
         if ORG_ROLE_HIERARCHY[acting_role] <= ORG_ROLE_HIERARCHY[target_role]:

@@ -1,5 +1,7 @@
 import logging
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 from rest_framework.exceptions import NotFound, ValidationError
 
 from app.projects.models import Project, ProjectMembership
@@ -54,44 +56,40 @@ def get_stale_explicit_members(project):
 
 def get_project(project_id):
     """
-    Returns a project instance by project_id".
+    Returns a project instance by project_id.
+    Raises NotFound (404) for a missing, soft-deleted or malformed id.
     """
     logger.debug(f"Getting project: {project_id}")
-    if project_id:
-        try:
-            obj = Project.objects.filter(id = project_id, is_deleted=False).first()
-            if not obj:
-                logger.warning(f"Project not found: {project_id}")
-                raise NotFound("Project not found")
-            logger.debug(f"Project found: {obj.name}")
-            return obj
-        except Exception as e:
-            logger.error(f"Error getting project {project_id}: {str(e)}")
-            raise Exception(e)
-    logger.warning("Project ID is required but not provided")
-    raise ValidationError("Project ID is required")
+    if not project_id:
+        logger.warning("Project ID is required but not provided")
+        raise ValidationError("Project ID is required")
+
+    try:
+        obj = Project.objects.filter(id=project_id, is_deleted=False).first()
+    except (DjangoValidationError, ValueError):
+        obj = None  # malformed UUID
+    if not obj:
+        logger.warning(f"Project not found: {project_id}")
+        raise NotFound("Project not found")
+    logger.debug(f"Project found: {obj.name}")
+    return obj
 
 def get_all_project_memberships(project_id):
     """
     Returns all members of a project by project_id.
     """
     if project_id:
-        try:
-            return ProjectMembership.objects.filter(project=project_id)
-        except Exception as e:
-            raise Exception(e)
-    raise ValidationError("Project ID os required")
+        return ProjectMembership.objects.filter(project=project_id)
+    raise ValidationError("Project ID is required")
 
 def get_project_membership(project_id, user):
     """
-    Returns a membership instance by team_id and user.
+    Returns a membership instance by project_id and user.
+    Raises NotFound when the user has no explicit membership on the project.
     """
     if project_id and user:
         try:
-            obj = ProjectMembership.objects.get(project=project_id, user=user)
-            if not obj:
-                raise ValidationError("user is not a member of this project")
-            return obj
-        except Exception as e:
-            raise Exception(e)
-    raise ValidationError("project ID and user are required")
+            return ProjectMembership.objects.get(project=project_id, user=user)
+        except ProjectMembership.DoesNotExist:
+            raise NotFound("Project membership not found")
+    raise ValidationError("Project ID and user are required")

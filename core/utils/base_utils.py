@@ -1,6 +1,6 @@
 import logging
 
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 
 from app.accounts.models import User
 from app.organizations.services.organization_membership_service import add_org_member
@@ -40,32 +40,31 @@ def get_user(identifier, kind="email"):
 def add_member(payload):
     """
     Adds a member to the specified organization or team or project.
-    """
-    try:
-        entity_id = payload.get('entity_id')
-        user_id = payload.get('user_id')
-        role = payload.get('role')
-        invite_type = payload.get('invite_type')
-        
-        user = User.objects.get(id=user_id, is_deleted=False)
-        
-        if invite_type == 'organization':
-            org = get_org(entity_id)
-            org_membership = add_org_member(organization=org, user=user, role=role)
-            return org_membership
-        
-        elif invite_type == 'team':
-            team = get_team(entity_id)
-            team_membership = add_team_member(team=team, user=user, role=role)
-            return team_membership
-        
-        elif invite_type == 'project':
-            project = get_project(entity_id)
-            project_membership = add_project_member(project=project, user=user, role=role)
-            return project_membership
 
-        else:
-            raise ValidationError("Invalid invite type")
-    
-    except Exception as e:
-        raise Exception(e)
+    DRF errors (already a member, member limit reached, entity not found ...)
+    propagate untouched so the client gets the right 4xx - they used to be
+    re-wrapped in a bare Exception, which surfaced as HTTP 500.
+    """
+    entity_id = payload.get('entity_id')
+    user_id = payload.get('user_id')
+    role = payload.get('role')
+    invite_type = payload.get('invite_type')
+
+    try:
+        user = User.objects.get(id=user_id, is_deleted=False)
+    except User.DoesNotExist:
+        raise NotFound("User not found")
+
+    if invite_type == 'organization':
+        org = get_org(entity_id)
+        return add_org_member(organization=org, user=user, role=role)
+
+    elif invite_type == 'team':
+        team = get_team(entity_id)
+        return add_team_member(team=team, user=user, role=role)
+
+    elif invite_type == 'project':
+        project = get_project(entity_id)
+        return add_project_member(project=project, user=user, role=role)
+
+    raise ValidationError("Invalid invite type")

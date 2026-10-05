@@ -14,6 +14,8 @@ class OrgSettingsUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrganizationSettings
         fields = '__all__'
+        # The settings row is bound to its organization; it must never be re-pointed.
+        read_only_fields = ["organization"]
         
     def validate(self, attrs):
         for field_name, new_value in attrs.items():

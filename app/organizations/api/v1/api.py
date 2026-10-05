@@ -31,7 +31,7 @@ from core.permissions.base import get_org_role
 from app.governance.services.rules_engine import GovernanceResolver
 from core.permissions.mixins import RoleCheckerMixin, EnforceObjectPermissionsMixin
 from core.permissions.organization import (
-    IsOrganizationMember, IsOrganizationOwner, IsOrganizationPart, IsOrganizationManager
+    IsOrganizationOwner, IsOrganizationPart, IsOrganizationManager
 )
 from core.pagination import StandardPagination
 
@@ -56,7 +56,9 @@ class OrganizationAPI(
         elif self.action in ["retrieve", "members"]:
             permissions = [IsAuthenticated, IsOrganizationPart]
         elif self.action == "self_remove_member":
-            permissions = [IsAuthenticated, IsOrganizationMember]
+            # Any member may leave - including VIEWERs, which IsOrganizationMember
+            # (MEMBER or above) used to lock out.
+            permissions = [IsAuthenticated, IsOrganizationPart]
         elif self.action in ["send_invite", "add_member", "update_member", "remove_member"]:
             permissions = [IsAuthenticated, IsOrganizationManager]
         elif self.action in ["update", "transfer_owner", "destroy"]:
@@ -119,6 +121,11 @@ class OrganizationAPI(
             return OrganizationMembershipFilter
         return OrganizationFilter
     
+    def get_search_fields(self):
+        if self.action == "members":
+            return ["user__email"]
+        return self.search_fields
+
     def get_ordering_fields(self):
         if self.action == "members":
             return ["joined_at"]
@@ -127,6 +134,7 @@ class OrganizationAPI(
     def apply_filters(self, request, queryset):
         self.filterset_class = self.get_filterset_class()
         self.ordering_fields = self.get_ordering_fields()
+        self.search_fields = self.get_search_fields()
         
         django_filter = DjangoFilterBackend()
         queryset = django_filter.filter_queryset(request, queryset, self)
@@ -227,7 +235,8 @@ class OrganizationAPI(
         logger.info(f"Listing members for organization: {org_id} by user: {request.user.email}")
         org = self.permission_object
 
-        members = get_all_org_memberships(org.id)
+        # Apply the role filter / search / ordering (they were declared but never used).
+        members = self.apply_filters(request, get_all_org_memberships(org.id))
 
         page = self.pagination_class.paginate_queryset(members, request)
         logger.debug(f"Found {len(page)} members for organization: {org.name}")

@@ -7,8 +7,10 @@ from app.projects.models import ProjectMembership
 from services.invite_token_service import store_invite_token
 from services.notification_services import send_invite_email
 
-from core.constants.project_constant import PROJECT_ROLES
+from core.constants.project_constant import PROJECT_ROLES, PROJECT_ROLE_HIERARCHY
+from core.permissions.resolver import member_admin_role
 from core.utils.project_utils import count_explicit_members
+from core.utils.role_utils import ensure_can_grant_role
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,13 @@ def send_project_invite(*, project, user, invited_by, role):
     if role not in [r[0] for r in PROJECT_ROLES]:
         logger.error(f"Invalid role '{role}' provided for project invite to {user.email}")
         raise ValidationError("Invalid role specified")
-    
+
+    ensure_can_grant_role(
+        role=role,
+        granter_role=member_admin_role(invited_by, project),
+        hierarchy=PROJECT_ROLE_HIERARCHY,
+    )
+
     invite_token = store_invite_token(
         user_id=user.id,
         invite_type="project",

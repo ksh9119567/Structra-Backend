@@ -1,5 +1,5 @@
 import uuid
-import random
+import secrets
 import string
 import logging
 
@@ -20,7 +20,8 @@ def _make_key(kind: str, identifier: str) -> str:
 
 def generate_otp(length=6) -> str:
     # numeric OTP
-    otp = ''.join(random.choices(string.digits, k=length))
+    # secrets, not random: OTPs are credentials and must not be predictable.
+    otp = ''.join(secrets.choice(string.digits) for _ in range(length))
     logger.debug(f"Generated OTP of length {length}")
     return otp
 
